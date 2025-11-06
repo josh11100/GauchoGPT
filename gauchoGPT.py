@@ -145,7 +145,7 @@ def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
     st.caption("Data pulled live from public pages when possible. Always verify details with the property manager.")
 
-    col_a, col_b, col_c, col_d = st.columns([2,1,1,1])
+    col_a, col_b, col_c, col_d, col_e = st.columns([2,1,1,1,1])
     with col_a:
         q = st.text_input("Search keyword (optional)", placeholder="2 bed, Del Playa, studio…")
     with col_b:
@@ -154,6 +154,8 @@ def housing_page():
         beds = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4+"], index=0)
     with col_d:
         fetch_btn = st.button("Fetch IVProperties")
+    with col_e:
+        only_available = st.checkbox("Only Available")
 
     st.markdown("""
     <div class='small muted'>
@@ -430,4 +432,3 @@ st.sidebar.markdown("""
 - Add caching and rate limiting if you fetch often.
 - Connect an LLM for the Q&A tab.
 """)
-
