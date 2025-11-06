@@ -209,6 +209,22 @@ def housing_page():
                     "Link": L.link if L.link.startswith("http") else ("https://www.ivproperties.com" + L.link if L.link else "")
                 })
 
+                # Apply keyword search filters
+                if q:
+                    rows = [
+                        r for r in rows
+                        if q.lower() in r["Title"].lower()
+                        or q.lower() in r["Address"].lower()
+                        or q.lower() in r["Beds"].lower()
+                        or q.lower() in r["Baths"].lower()
+                    ]
+
+                # Apply sublease check filter
+                if sublease:
+                    rows = [
+                        r for r in rows
+                        if "sublease" in r["Title"].lower() or "sublease" in r["Address"].lower()
+                    ]
             if not rows:
                 st.info("No matching results found (or the site's markup changed). Try clearing filters.")
                 st.caption("Tip: You can expand this parser for different selectors unique to the site.")
