@@ -153,9 +153,9 @@ def housing_page():
     with col_c:
         beds = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4+"], index=0)
     with col_d:
-        fetch_btn = st.button("Fetch IVProperties")
+        sublease = st.checkbox("Sublease")
     with col_e:
-        only_available = st.checkbox("Only Available")
+        fetch_btn = st.button("Fetch IVProperties")
 
     st.markdown("""
     <div class='small muted'>
