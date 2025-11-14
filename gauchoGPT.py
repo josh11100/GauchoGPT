@@ -6,12 +6,6 @@
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
 # - Financial aid & jobs FAQs (with handy links)
-# 
-# Notes:
-# • This is an MVP scaffold designed for easy local launch and iteration.
-# • Scraping is best-effort and may break if site structure changes; see TODOs.
-# • Before deploying publicly, check each site's Terms of Service and robots.txt.
-# • Replace placeholder links with official UCSB URLs you curate.
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -46,20 +40,123 @@ st.set_page_config(
 )
 
 # ---------------------------
-# Style helpers
+# UCSB theme + style helpers  👇  (MAIN CHANGE #1)
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
     <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        .small {font-size: 0.85rem; color: #666;}
+        /* App background */
+        [data-testid="stAppViewContainer"] {
+            background: linear-gradient(180deg, #f5f7fb 0%, #ffffff 60%);
+        }
+
+        /* Global text tweaks */
+        h1, h2, h3, h4 {
+            color: #003660; /* UCSB navy */
+        }
+
+        /* Sidebar look */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #002855 0%, #003660 80%);
+            color: #f9fafb;
+            border-right: 1px solid rgba(15, 23, 42, 0.25);
+        }
+
+        [data-testid="stSidebar"] * {
+            color: #f9fafb !important;
+        }
+
+        /* Sidebar title logo-ish spacing */
+        [data-testid="stSidebar"] .block-container {
+            padding-top: 1.5rem;
+        }
+
+        /* Radio group: hide the bullet + style labels like tabs */
+        [data-testid="stSidebar"] [role="radiogroup"] label {
+            cursor: pointer;
+            padding: 0.35rem 0.25rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        /* hide the default radio circle */
+        [data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {
+            display: none;
+        }
+
+        /* base label style */
+        [data-testid="stSidebar"] [role="radiogroup"] p {
+            font-weight: 500;
+            text-decoration: underline;
+            letter-spacing: 0.01em;
+        }
+
+        /* active tab (best-effort using aria-checked) */
+        [data-testid="stSidebar"] [role="radio"][aria-checked="true"] {
+            background: rgba(253, 181, 21, 0.16);  /* UCSB gold tint */
+            border-radius: 0.35rem;
+        }
+        [data-testid="stSidebar"] [role="radio"][aria-checked="true"] p {
+            font-weight: 700;
+            color: #FDB515 !important;  /* UCSB gold */
+        }
+
+        /* small helper text */
+        .small {font-size: 0.85rem; color: #6b7280;}
         .muted {color:#6b7280}
-        .pill {display:inline-block; padding:4px 10px; border-radius:9999px; background:#eef2ff; color:#3730a3; font-weight:600; margin-right:8px}
-        .tag  {display:inline-block; padding:2px 8px; border-radius:9999px; background:#f1f5f9; color:#334155; font-weight:500; margin-right:6px}
-        .code {font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#0b1021; color:#d1e1ff; padding:3px 6px; border-radius:6px}
+        .pill {
+            display:inline-block;
+            padding:4px 10px;
+            border-radius:9999px;
+            background:#eef2ff;
+            color:#003660;
+            font-weight:600;
+            margin-right:8px
+        }
+        .tag  {
+            display:inline-block;
+            padding:2px 8px;
+            border-radius:9999px;
+            background:#eff6ff;
+            color:#1d4ed8;
+            font-weight:500;
+            margin-right:6px
+        }
+        .code {
+            font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background:#0b1021;
+            color:#d1e1ff;
+            padding:3px 6px;
+            border-radius:6px
+        }
         .ok   {color:#059669; font-weight:600}
         .warn {color:#b45309; font-weight:600}
         .err  {color:#b91c1c; font-weight:700}
+
+        /* Buttons & link buttons in UCSB colors */
+        .stButton > button, .st-link-button {
+            border-radius: 9999px;
+            border-width: 0;
+            padding: 0.4rem 1.15rem;
+            font-weight: 600;
+            background: #003660;       /* navy primary */
+            color: #f9fafb;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
+        }
+        .stButton > button:hover, .st-link-button:hover {
+            background: #FDB515;       /* gold on hover */
+            color: #111827;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.35);
+        }
+
+        /* Dataframe header tweaks */
+        .stDataFrame thead tr th {
+            background-color: #003660 !important;
+            color: #f9fafb !important;
+        }
+
+        /* Expander headers */
+        [data-testid="stExpander"] > summary:hover {
+            color: #003660;
+        }
     </style>
 """
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
@@ -105,27 +202,25 @@ def parse_ivproperties_listings(html: str) -> List[Listing]:
     This may need updates if the site's markup changes.
     """
     soup = BeautifulSoup(html, "html.parser")
-    cards = []
+    cards: List[Listing] = []
 
-    # Try a few common patterns
     selectors = [
-        "div.listing",               # generic
-        "article.property-card",     # alt pattern
-        "div.property-card",         # alt pattern
-        "li.property"                # alt
+        "div.listing",
+        "article.property-card",
+        "div.property-card",
+        "li.property",
     ]
 
     for sel in selectors:
         nodes = soup.select(sel)
         if nodes:
             for node in nodes:
-                # Heuristics to extract fields
                 title = (node.select_one(".title") or node.select_one("h2") or node.select_one("h3"))
                 address = node.select_one(".address")
                 price = node.select_one(".price")
-                beds  = node.select_one(".beds, .bedrooms")
+                beds = node.select_one(".beds, .bedrooms")
                 baths = node.select_one(".baths, .bathrooms")
-                link  = node.select_one("a")
+                link = node.select_one("a")
 
                 listing = Listing(
                     title=title.get_text(strip=True) if title else "Listing",
@@ -133,7 +228,7 @@ def parse_ivproperties_listings(html: str) -> List[Listing]:
                     price=price.get_text(strip=True) if price else "—",
                     beds=beds.get_text(strip=True) if beds else "—",
                     baths=baths.get_text(strip=True) if baths else "—",
-                    link=link.get("href") if link else ""
+                    link=link.get("href") if link else "",
                 )
                 cards.append(listing)
             break
@@ -145,7 +240,7 @@ def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
     st.caption("Data pulled live from public pages when possible. Always verify details with the property manager.")
 
-    col_a, col_b, col_c, col_d, col_e = st.columns([2,1,1,1,1])
+    col_a, col_b, col_c, col_d, col_e = st.columns([2, 1, 1, 1, 1])
     with col_a:
         q = st.text_input("Search keyword (optional)", placeholder="2 bed, Del Playa, studio…")
     with col_b:
@@ -157,18 +252,19 @@ def housing_page():
     with col_e:
         fetch_btn = st.button("Fetch IVProperties")
 
-    st.markdown("""
-    <div class='small muted'>
-    <span class='pill'>Source</span> ivproperties.com · Respect robots.txt · Use responsibly
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class='small muted'>
+        <span class='pill'>Source</span> ivproperties.com · Respect robots.txt · Use responsibly
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if fetch_btn:
         with st.spinner("Contacting ivproperties.com…"):
-            # This is a generic catalog URL; adjust if the real site filters exist
             url = "https://www.ivproperties.com/"
             if q:
-                # some sites ignore query params; this ensures we hit the homepage then filter client-side
                 url = f"https://www.ivproperties.com/?q={quote_plus(q)}"
             resp = fetch(url)
             if not resp:
@@ -176,14 +272,13 @@ def housing_page():
 
             listings = parse_ivproperties_listings(resp.text)
 
-            # Optional client-side filters
             def price_to_int(p: str) -> Optional[int]:
                 m = re.search(r"(\$?)([\d,]+)", p)
                 if not m:
                     return None
                 try:
                     return int(m.group(2).replace(",", ""))
-                except:
+                except Exception:
                     return None
 
             rows = []
@@ -193,49 +288,55 @@ def housing_page():
                     continue
                 if beds != "Any":
                     if beds == "4+":
-                        # accept 4 or more
                         b = re.search(r"(\d+)", L.beds or "")
                         if not (b and int(b.group(1)) >= 4):
                             continue
                     else:
                         if beds.lower() not in (L.beds or "").lower():
                             continue
-                rows.append({
-                    "Title": L.title,
-                    "Address": L.address,
-                    "Price": L.price,
-                    "Beds": L.beds,
-                    "Baths": L.baths,
-                    "Link": L.link if L.link.startswith("http") else ("https://www.ivproperties.com" + L.link if L.link else "")
-                })
+                rows.append(
+                    {
+                        "Title": L.title,
+                        "Address": L.address,
+                        "Price": L.price,
+                        "Beds": L.beds,
+                        "Baths": L.baths,
+                        "Link": L.link
+                        if L.link.startswith("http")
+                        else ("https://www.ivproperties.com" + L.link if L.link else ""),
+                    }
+                )
 
-                # Apply keyword search filters
-                if q:
-                    rows = [
-                        r for r in rows
-                        if q.lower() in r["Title"].lower()
-                        or q.lower() in r["Address"].lower()
-                        or q.lower() in r["Beds"].lower()
-                        or q.lower() in r["Baths"].lower()
-                    ]
+            if q:
+                q_lower = q.lower()
+                rows = [
+                    r
+                    for r in rows
+                    if q_lower in r["Title"].lower()
+                    or q_lower in r["Address"].lower()
+                    or q_lower in r["Beds"].lower()
+                    or q_lower in r["Baths"].lower()
+                ]
 
-                # Apply sublease check filter
-                if sublease:
-                    rows = [
-                        r for r in rows
-                        if "sublease" in r["Title"].lower() or "sublease" in r["Address"].lower()
-                    ]
+            if sublease:
+                rows = [
+                    r
+                    for r in rows
+                    if "sublease" in r["Title"].lower() or "sublease" in r["Address"].lower()
+                ]
+
             if not rows:
                 st.info("No matching results found (or the site's markup changed). Try clearing filters.")
                 st.caption("Tip: You can expand this parser for different selectors unique to the site.")
                 return
 
-
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True)
 
             for r in rows:
-                st.markdown(f"- [{r['Title']}]({r['Link']}) — {r['Price']} · {r['Beds']} · {r['Baths']} · {r['Address']}")
+                st.markdown(
+                    f"- [{r['Title']}]({r['Link']}) — {r['Price']} · {r['Beds']} · {r['Baths']} · {r['Address']}"
+                )
 
             st.success("Fetched listings. Always cross-check availability with the property manager.")
 
@@ -243,9 +344,7 @@ def housing_page():
         st.write(
             """
             • Scraping public pages can break if the site changes. Keep requests minimal and cached.
-            
             • Check each site's **Terms of Service** and **robots.txt**. If scraping is disallowed, remove it.
-            
             • Prefer official APIs or email the property manager for a feed.
             """
         )
@@ -254,7 +353,6 @@ def housing_page():
 # ACADEMICS (advising quick links)
 # ---------------------------
 MAJOR_SHEETS = {
-    # Replace with the official links you curate later
     "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergrad/majors",
     "Computer Science": "https://www.cs.ucsb.edu/education/undergraduate",
     "Economics": "https://econ.ucsb.edu/undergrad",
@@ -301,7 +399,6 @@ def academics_page():
 # CLASS LOCATION (map)
 # ---------------------------
 BUILDINGS = {
-    # Approximate campus coordinates (lat, lon). Add more as needed.
     "Phelps Hall (PHELP)": (34.41239, -119.84862),
     "Harold Frank Hall (HFH)": (34.41434, -119.84246),
     "Chemistry (CHEM)": (34.41165, -119.84586),
@@ -402,11 +499,8 @@ def aid_jobs_page():
         st.link_button(label, url)
 
 # ---------------------------
-# (Optional) Q&A assistant placeholder
+# Q&A placeholder
 # ---------------------------
-# To wire this up to an LLM, add a function that calls your preferred API.
-# Keep keys in environment variables and never hardcode.
-
 def qa_page():
     st.header("💬 Ask gauchoGPT (placeholder)")
     st.caption("Wire this to your preferred LLM API or a local model.")
@@ -420,16 +514,19 @@ def qa_page():
             # Example sketch (pseudocode):
             # from openai import OpenAI
             # client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            # resp = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role":"user","content": prompt}])
+            # resp = client.chat.completions.create(
+            #     model="gpt-4o-mini",
+            #     messages=[{"role": "user", "content": prompt}],
+            # )
             # st.write(resp.choices[0].message.content)
             """,
             language="python",
         )
 
 # ---------------------------
-# Sidebar navigation
+# Sidebar navigation (logic is same, UI styled via CSS)  👇 (MAIN CHANGE #2)
 # ---------------------------
-PAGES = {
+PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
     "Academics": academics_page,
     "Class Locator": locator_page,
@@ -442,10 +539,12 @@ choice = st.sidebar.radio("Navigate", list(PAGES.keys()))
 PAGES[choice]()
 
 st.sidebar.divider()
-st.sidebar.markdown("""
+st.sidebar.markdown(
+    """
 **Next steps**
 - Swap placeholder links with official UCSB URLs you trust.
 - Expand the ivproperties parser for site-specific selectors.
 - Add caching and rate limiting if you fetch often.
 - Connect an LLM for the Q&A tab.
-""")
+"""
+)
