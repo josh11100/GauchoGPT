@@ -230,6 +230,7 @@ def housing_page():
                 st.caption("Tip: You can expand this parser for different selectors unique to the site.")
                 return
 
+
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True)
 
