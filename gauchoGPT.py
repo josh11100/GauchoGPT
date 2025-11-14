@@ -54,27 +54,41 @@ HIDE_STREAMLIT_STYLE = """
             color: #003660; /* UCSB navy */
         }
 
-        /* Sidebar look */
+        /* Sidebar look — make it wider + more important */
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #002855 0%, #003660 80%);
             color: #f9fafb;
             border-right: 1px solid rgba(15, 23, 42, 0.25);
+
+            /* WIDTH CHANGES 👇 */
+            min-width: 260px;
+            width: 280px;
+            max-width: 320px;
         }
 
         [data-testid="stSidebar"] * {
             color: #f9fafb !important;
         }
 
-        /* Sidebar title logo-ish spacing */
+        /* Sidebar inner padding */
         [data-testid="stSidebar"] .block-container {
-            padding-top: 1.5rem;
+            padding-top: 1.75rem;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
         }
 
-        /* Radio group: hide the bullet + style labels like tabs */
+        /* Radio group: style like BIG nav buttons */
+        [data-testid="stSidebar"] [role="radiogroup"] {
+            gap: 0.3rem;
+        }
+
         [data-testid="stSidebar"] [role="radiogroup"] label {
             cursor: pointer;
-            padding: 0.35rem 0.25rem;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 0.65rem 0.9rem;      /* bigger click area */
+            margin-bottom: 0.25rem;
+            border-radius: 0.6rem;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: rgba(15, 23, 42, 0.25);
         }
 
         /* hide the default radio circle */
@@ -84,15 +98,17 @@ HIDE_STREAMLIT_STYLE = """
 
         /* base label style */
         [data-testid="stSidebar"] [role="radiogroup"] p {
-            font-weight: 500;
-            text-decoration: underline;
+            font-weight: 600;
+            text-decoration: none;
             letter-spacing: 0.01em;
+            font-size: 0.98rem;           /* bigger text */
         }
 
         /* active tab (best-effort using aria-checked) */
         [data-testid="stSidebar"] [role="radio"][aria-checked="true"] {
-            background: rgba(253, 181, 21, 0.16);  /* UCSB gold tint */
-            border-radius: 0.35rem;
+            background: rgba(253, 181, 21, 0.18);  /* UCSB gold tint */
+            border-color: #FDB515;
+            box-shadow: 0 0 0 1px rgba(253, 181, 21, 0.7);
         }
         [data-testid="stSidebar"] [role="radio"][aria-checked="true"] p {
             font-weight: 700;
@@ -100,8 +116,8 @@ HIDE_STREAMLIT_STYLE = """
         }
 
         /* small helper text */
-        .small {font-size: 0.85rem; color: #6b7280;}
-        .muted {color:#6b7280}
+        .small {font-size: 0.85rem; color: #e5e7eb;}
+        .muted {color:#e5e7eb;}
         .pill {
             display:inline-block;
             padding:4px 10px;
@@ -159,6 +175,7 @@ HIDE_STREAMLIT_STYLE = """
         }
     </style>
 """
+
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
 st.sidebar.title("🧢 gauchoGPT")
