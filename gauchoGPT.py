@@ -1,4 +1,4 @@
-# gauchoGPT — Streamlit MVP
+# gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
 # A single-file Streamlit web app to help UCSB students with:
 # - Housing in Isla Vista (basic scraper for ivproperties.com with polite headers)
@@ -40,145 +40,177 @@ st.set_page_config(
 )
 
 # ---------------------------
-# UCSB theme + style helpers  👇  (MAIN CHANGE #1)
+# UCSB GOLD theme + style helpers
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
-    <style>
-        /* App background */
-        [data-testid="stAppViewContainer"] {
-            background: linear-gradient(180deg, #f5f7fb 0%, #ffffff 60%);
-        }
+<style>
+    /* ------- App background + base text ------- */
+    [data-testid="stAppViewContainer"] {
+        background: #ffffff;
+    }
+    h1, h2, h3, h4 {
+        color: #003660; /* UCSB navy */
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body, p, label, span, div {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-        /* Global text tweaks */
-        h1, h2, h3, h4 {
-            color: #003660; /* UCSB navy */
-        }
+    /* ------- Top GOLD-style header bar ------- */
+    .gold-topbar {
+        width: 100%;
+        background: #003660; /* deep navy */
+        color: #ffffff;
+        padding: 10px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.95rem;
+        box-shadow: 0 2px 4px rgba(15,23,42,0.25);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+    .gold-topbar-left {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .gold-topbar-right {
+        font-weight: 500;
+        opacity: 0.9;
+    }
 
-        /* Sidebar look — make it wider + more important */
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #002855 0%, #003660 80%);
-            color: #f9fafb;
-            border-right: 1px solid rgba(15, 23, 42, 0.25);
+    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    .gold-nav-wrapper {
+        width: 100%;
+        background: #FDB515; /* UCSB gold */
+        padding: 4px 24px 0 24px;
+        box-shadow: 0 1px 2px rgba(15,23,42,0.15);
+        margin-bottom: 12px;
+    }
 
-            /* WIDTH CHANGES 👇 */
-            min-width: 260px;
-            width: 280px;
-            max-width: 320px;
-        }
+    /* This targets the horizontal radio group we use for main nav */
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] {
+        gap: 0;
+    }
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
+        cursor: pointer;
+        padding: 6px 18px;
+        border-radius: 0;
+        border: 1px solid rgba(15,23,42,0.18);
+        border-bottom: none;
+        background: #FDE68A;   /* light gold */
+        color: #111827;
+        margin-right: 0;
+    }
+    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
+        background: #ffffff;
+        border-bottom: 3px solid #ffffff;
+        box-shadow: 0 -2px 0 0 #ffffff;
+    }
+    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
+        color: #003660;
+        font-weight: 700;
+    }
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0;
+    }
 
-        [data-testid="stSidebar"] * {
-            color: #f9fafb !important;
-        }
+    /* ------- Sidebar: light column like GOLD left section ------- */
+    [data-testid="stSidebar"] {
+        background: #f3f4f6;
+        border-right: 1px solid #d1d5db;
+        min-width: 260px;
+        max-width: 280px;
+    }
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 1.25rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    [data-testid="stSidebar"] * {
+        color: #111827 !important;
+    }
 
-        /* Sidebar inner padding */
-        [data-testid="stSidebar"] .block-container {
-            padding-top: 1.75rem;
-            padding-left: 1.5rem;
-            padding-right: 1.5rem;
-        }
+    /* ------- Buttons in GOLD/NAVY ------- */
+    .stButton > button, .st-link-button {
+        border-radius: 9999px;
+        border-width: 0;
+        padding: 0.35rem 1.05rem;
+        font-weight: 600;
+        background: #003660;
+        color: #ffffff;
+        box-shadow: 0 3px 8px rgba(15,23,42,0.25);
+    }
+    .stButton > button:hover, .st-link-button:hover {
+        background: #FDB515;
+        color: #111827;
+    }
 
-        /* Radio group: style like BIG nav buttons */
-        [data-testid="stSidebar"] [role="radiogroup"] {
-            gap: 0.3rem;
-        }
+    /* ------- Tables / cards look closer to GOLD ------- */
+    .stDataFrame thead tr th {
+        background-color: #003660 !important;
+        color: #f9fafb !important;
+    }
 
-        [data-testid="stSidebar"] [role="radiogroup"] label {
-            cursor: pointer;
-            padding: 0.65rem 0.9rem;      /* bigger click area */
-            margin-bottom: 0.25rem;
-            border-radius: 0.6rem;
-            border: 1px solid rgba(148, 163, 184, 0.4);
-            background: rgba(15, 23, 42, 0.25);
-        }
+    .small {font-size: 0.85rem; color: #4b5563;}
+    .muted {color:#6b7280;}
+    .pill {
+        display:inline-block;
+        padding:4px 10px;
+        border-radius:9999px;
+        background:#e5e7eb;
+        color:#003660;
+        font-weight:600;
+        margin-right:8px;
+    }
+    .tag  {
+        display:inline-block;
+        padding:2px 8px;
+        border-radius:9999px;
+        background:#eff6ff;
+        color:#1d4ed8;
+        font-weight:500;
+        margin-right:6px
+    }
+    .code {
+        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background:#0b1021;
+        color:#d1e1ff;
+        padding:3px 6px;
+        border-radius:6px
+    }
+    .ok   {color:#059669; font-weight:600}
+    .warn {color:#b45309; font-weight:600}
+    .err  {color:#b91c1c; font-weight:700}
 
-        /* hide the default radio circle */
-        [data-testid="stSidebar"] [role="radiogroup"] label > div:first-child {
-            display: none;
-        }
-
-        /* base label style */
-        [data-testid="stSidebar"] [role="radiogroup"] p {
-            font-weight: 600;
-            text-decoration: none;
-            letter-spacing: 0.01em;
-            font-size: 0.98rem;           /* bigger text */
-        }
-
-        /* active tab (best-effort using aria-checked) */
-        [data-testid="stSidebar"] [role="radio"][aria-checked="true"] {
-            background: rgba(253, 181, 21, 0.18);  /* UCSB gold tint */
-            border-color: #FDB515;
-            box-shadow: 0 0 0 1px rgba(253, 181, 21, 0.7);
-        }
-        [data-testid="stSidebar"] [role="radio"][aria-checked="true"] p {
-            font-weight: 700;
-            color: #FDB515 !important;  /* UCSB gold */
-        }
-
-        /* small helper text */
-        .small {font-size: 0.85rem; color: #e5e7eb;}
-        .muted {color:#e5e7eb;}
-        .pill {
-            display:inline-block;
-            padding:4px 10px;
-            border-radius:9999px;
-            background:#eef2ff;
-            color:#003660;
-            font-weight:600;
-            margin-right:8px
-        }
-        .tag  {
-            display:inline-block;
-            padding:2px 8px;
-            border-radius:9999px;
-            background:#eff6ff;
-            color:#1d4ed8;
-            font-weight:500;
-            margin-right:6px
-        }
-        .code {
-            font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            background:#0b1021;
-            color:#d1e1ff;
-            padding:3px 6px;
-            border-radius:6px
-        }
-        .ok   {color:#059669; font-weight:600}
-        .warn {color:#b45309; font-weight:600}
-        .err  {color:#b91c1c; font-weight:700}
-
-        /* Buttons & link buttons in UCSB colors */
-        .stButton > button, .st-link-button {
-            border-radius: 9999px;
-            border-width: 0;
-            padding: 0.4rem 1.15rem;
-            font-weight: 600;
-            background: #003660;       /* navy primary */
-            color: #f9fafb;
-            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
-        }
-        .stButton > button:hover, .st-link-button:hover {
-            background: #FDB515;       /* gold on hover */
-            color: #111827;
-            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.35);
-        }
-
-        /* Dataframe header tweaks */
-        .stDataFrame thead tr th {
-            background-color: #003660 !important;
-            color: #f9fafb !important;
-        }
-
-        /* Expander headers */
-        [data-testid="stExpander"] > summary:hover {
-            color: #003660;
-        }
-    </style>
+    /* Expander headers hover */
+    [data-testid="stExpander"] > summary:hover {
+        color: #003660;
+    }
+</style>
 """
 
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
-st.sidebar.title("🧢 gauchoGPT")
+# GOLD-style header bar (like UCSB GOLD)
+st.markdown(
+    """
+    <div class="gold-topbar">
+        <div class="gold-topbar-left">UCSB Gaucho On-Line Data</div>
+        <div class="gold-topbar-right">gauchoGPT · UCSB Student Helper</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Sidebar info (not main nav anymore)
+st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing • classes • professors • aid • jobs")
 
 # ---------------------------
@@ -370,10 +402,10 @@ def housing_page():
 # ACADEMICS (advising quick links)
 # ---------------------------
 MAJOR_SHEETS = {
-    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergrad/majors",
-    "Computer Science": "https://www.cs.ucsb.edu/education/undergraduate",
-    "Economics": "https://econ.ucsb.edu/undergrad",
-    "Mathematics": "https://www.math.ucsb.edu/undergrad",
+    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergraduate/majors-minors/stats-and-data-science-major",
+    "Computer Science": "https://cs.ucsb.edu/education/undergraduate/current-students",
+    "Economics": "https://econ.ucsb.edu/programs/undergraduate/majors",
+    "Mathematics": "https://www.math.ucsb.edu/undergraduate/proposed-courses-study-plans",
 }
 
 def academics_page():
@@ -541,7 +573,7 @@ def qa_page():
         )
 
 # ---------------------------
-# Sidebar navigation (logic is same, UI styled via CSS)  👇 (MAIN CHANGE #2)
+# GOLD-style main navigation (horizontal, like GOLD tabs)
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
@@ -552,9 +584,20 @@ PAGES: Dict[str, Any] = {
     "Q&A (WIP)": qa_page,
 }
 
-choice = st.sidebar.radio("Navigate", list(PAGES.keys()))
+st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
+choice = st.radio(
+    "Main navigation",  # visually styled as tabs by CSS above
+    list(PAGES.keys()),
+    horizontal=True,
+    index=0,
+    key="main_nav",
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Render the selected page
 PAGES[choice]()
 
+# Sidebar helper text (like GOLD help/info column)
 st.sidebar.divider()
 st.sidebar.markdown(
     """
