@@ -1,7 +1,7 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
-# A single-file Streamlit web app to help UCSB students with:
-# - Housing in Isla Vista (basic scraper for ivproperties.com with polite headers)
+# A UCSB helper app for:
+# - Housing in Isla Vista (basic scraper for ivproperties.com)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
@@ -9,11 +9,7 @@
 # ------------------------------------------------------------
 
 from __future__ import annotations
-import os
 import re
-import time
-import math
-import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
@@ -81,44 +77,66 @@ HIDE_STREAMLIT_STYLE = """
         opacity: 0.9;
     }
 
-    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    /* ------- Second bar: GOLD navigation tabs (MAIN CHANGE) ------- */
     .gold-nav-wrapper {
         width: 100%;
-        background: #FDB515; /* UCSB gold */
-        padding: 4px 24px 0 24px;
+        background: #FDB515;
+        padding: 6px 24px 6px 24px;
         box-shadow: 0 1px 2px rgba(15,23,42,0.15);
         margin-bottom: 12px;
     }
 
-    /* This targets the horizontal radio group we use for main nav */
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] {
-        gap: 0;
+    /* Layout of the horizontal radio group we use for main nav */
+    .gold-nav-wrapper div[role="radiogroup"] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
     }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
+
+    /* Each label = tab */
+    .gold-nav-wrapper div[role="radiogroup"] > label {
         cursor: pointer;
-        padding: 6px 18px;
-        border-radius: 0;
-        border: 1px solid rgba(15,23,42,0.18);
-        border-bottom: none;
-        background: #FDE68A;   /* light gold */
-        color: #111827;
-        margin-right: 0;
+        border-radius: 9999px;
+        padding: 8px 18px;
+        border: 1px solid rgba(15,23,42,0.2);
+        background: #FDE68A;        /* light gold base */
+        margin: 0;
+        display: flex;
+        align-items: center;
     }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
-        background: #ffffff;
-        border-bottom: 3px solid #ffffff;
-        box-shadow: 0 -2px 0 0 #ffffff;
+
+    /* Hide the default radio circle bullet */
+    .gold-nav-wrapper div[role="radiogroup"] > label > div:first-child {
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
     }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
-        color: #003660;
+
+    /* Text inside the tab */
+    .gold-nav-wrapper div[role="radiogroup"] > label p {
+        font-size: 0.98rem;          /* bigger text */
         font-weight: 700;
-    }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
-        font-size: 0.88rem;
-        font-weight: 600;
-        text-transform: uppercase;
         letter-spacing: 0.03em;
-        margin-bottom: 0;
+        text-transform: uppercase;
+        margin: 0;
+        color: #111827;
+    }
+
+    /* Hover state */
+    .gold-nav-wrapper div[role="radiogroup"] > label:hover {
+        background: #FCD34D;
+    }
+
+    /* Selected tab (using :has to detect aria-checked="true") */
+    .gold-nav-wrapper div[role="radiogroup"] > label:has(div[role="radio"][aria-checked="true"]) {
+        background: #ffffff;
+        border-color: #003660;
+        box-shadow: 0 0 0 2px rgba(0,54,96,0.15);
+    }
+    .gold-nav-wrapper div[role="radiogroup"] > label:has(div[role="radio"][aria-checked="true"]) p {
+        color: #003660;
     }
 
     /* ------- Sidebar: light column like GOLD left section ------- */
@@ -402,10 +420,10 @@ def housing_page():
 # ACADEMICS (advising quick links)
 # ---------------------------
 MAJOR_SHEETS = {
-    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergraduate/majors-minors/stats-and-data-science-major",
-    "Computer Science": "https://cs.ucsb.edu/education/undergraduate/current-students",
-    "Economics": "https://econ.ucsb.edu/programs/undergraduate/majors",
-    "Mathematics": "https://www.math.ucsb.edu/undergraduate/proposed-courses-study-plans",
+    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergrad/majors",
+    "Computer Science": "https://www.cs.ucsb.edu/education/undergraduate",
+    "Economics": "https://econ.ucsb.edu/undergrad",
+    "Mathematics": "https://www.math.ucsb.edu/undergrad",
 }
 
 def academics_page():
@@ -466,145 +484,4 @@ def locator_page():
         folium.Marker([lat, lon], tooltip=bname).add_to(m)
         st_folium(m, width=900, height=500)
     else:
-        st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
-        st.write({"building": bname, "lat": lat, "lon": lon})
-
-    st.caption("Tip: You can load your full schedule and auto-pin buildings in a future version.")
-
-# ---------------------------
-# PROFESSORS (RMP + dept)
-# ---------------------------
-DEPT_SITES = {
-    "PSTAT": "https://www.pstat.ucsb.edu/people",
-    "CS": "https://www.cs.ucsb.edu/people/faculty",
-    "MATH": "https://www.math.ucsb.edu/people/faculty",
-}
-
-def profs_page():
-    st.header("👩‍🏫 Professors & course intel")
-    name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
-    dept = st.selectbox("Department site", list(DEPT_SITES.keys()))
-    col1, col2 = st.columns(2)
-    with col1:
-        if name:
-            q = quote_plus(f"{name} site:ratemyprofessors.com UCSB")
-            st.link_button("Search on RateMyProfessors", f"https://www.google.com/search?q={q}")
-        else:
-            st.caption("Enter a name to generate a quick RMP search link.")
-    with col2:
-        st.link_button("Open dept faculty page", DEPT_SITES[dept])
-
-    st.divider()
-    st.subheader("What to look for")
-    st.markdown(
-        """
-        - Syllabi from prior quarters (grading, workload, curve)
-        - RMP comments: look for **recent** terms and specific anecdotes
-        - Department Discord/Slack/Reddit for up-to-date tips
-        - Talk to students who recently took the course
-        """
-    )
-
-# ---------------------------
-# FINANCIAL AID & JOBS
-# ---------------------------
-AID_LINKS = {
-    "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
-    "UCSB Financial Aid": "https://www.finaid.ucsb.edu/",
-    "Work-Study (UCSB)": "https://www.finaid.ucsb.edu/types-of-aid/work-study",
-    "Handshake": "https://ucsb.joinhandshake.com/",
-}
-
-def aid_jobs_page():
-    st.header("💸 Financial aid, work-study & jobs")
-
-    with st.expander("What is financial aid?"):
-        st.write(
-            """
-            Financial aid reduces your cost of attendance via grants, scholarships, work-study, and loans.
-            File the **FAFSA** (or CADAA if applicable) as early as possible each year. Watch priority deadlines.
-            """
-        )
-    with st.expander("What is work-study?"):
-        st.write(
-            """
-            Work-study is a need-based program that lets you earn money via part-time jobs on or near campus.
-            Your award caps how much you can earn under work-study each year.
-            """
-        )
-    with st.expander("How to get a job quickly"):
-        st.markdown(
-            """
-            1) Set up your **Handshake** profile, upload resume.
-            2) Filter by *On-campus* or *Work-study eligible*.
-            3) Apply to 5–10 postings and follow up.
-            4) Visit department offices; ask about openings.
-            5) Consider research assistant roles if you have relevant skills.
-            """
-        )
-
-    st.subheader("Quick links")
-    for label, url in AID_LINKS.items():
-        st.link_button(label, url)
-
-# ---------------------------
-# Q&A placeholder
-# ---------------------------
-def qa_page():
-    st.header("💬 Ask gauchoGPT (placeholder)")
-    st.caption("Wire this to your preferred LLM API or a local model.")
-
-    prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
-    if st.button("Answer"):
-        st.info("Connect to an API (e.g., OpenAI, Anthropic) or a local model here.")
-        st.code(
-            """
-            import os
-            # Example sketch (pseudocode):
-            # from openai import OpenAI
-            # client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            # resp = client.chat.completions.create(
-            #     model="gpt-4o-mini",
-            #     messages=[{"role": "user", "content": prompt}],
-            # )
-            # st.write(resp.choices[0].message.content)
-            """,
-            language="python",
-        )
-
-# ---------------------------
-# GOLD-style main navigation (horizontal, like GOLD tabs)
-# ---------------------------
-PAGES: Dict[str, Any] = {
-    "Housing (IV)": housing_page,
-    "Academics": academics_page,
-    "Class Locator": locator_page,
-    "Professors": profs_page,
-    "Aid & Jobs": aid_jobs_page,
-    "Q&A (WIP)": qa_page,
-}
-
-st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
-choice = st.radio(
-    "Main navigation",  # visually styled as tabs by CSS above
-    list(PAGES.keys()),
-    horizontal=True,
-    index=0,
-    key="main_nav",
-)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Render the selected page
-PAGES[choice]()
-
-# Sidebar helper text (like GOLD help/info column)
-st.sidebar.divider()
-st.sidebar.markdown(
-    """
-**Next steps**
-- Swap placeholder links with official UCSB URLs you trust.
-- Expand the ivproperties parser for site-specific selectors.
-- Add caching and rate limiting if you fetch often.
-- Connect an LLM for the Q&A tab.
-"""
-)
+        st.info("Install folium + streamlit-folium for the interactive map: pip ins
