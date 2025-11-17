@@ -1,7 +1,7 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
-# A UCSB helper app for:
-# - Housing in Isla Vista (basic scraper for ivproperties.com)
+# A single-file Streamlit web app to help UCSB students with:
+# - Housing in Isla Vista (basic scraper for ivproperties.com with polite headers)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
@@ -9,7 +9,11 @@
 # ------------------------------------------------------------
 
 from __future__ import annotations
+import os
 import re
+import time
+import math
+import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
@@ -77,66 +81,44 @@ HIDE_STREAMLIT_STYLE = """
         opacity: 0.9;
     }
 
-    /* ------- Second bar: GOLD navigation tabs (MAIN CHANGE) ------- */
+    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
     .gold-nav-wrapper {
         width: 100%;
-        background: #FDB515;
-        padding: 6px 24px 6px 24px;
+        background: #FDB515; /* UCSB gold */
+        padding: 4px 24px 0 24px;
         box-shadow: 0 1px 2px rgba(15,23,42,0.15);
         margin-bottom: 12px;
     }
 
-    /* Layout of the horizontal radio group we use for main nav */
-    .gold-nav-wrapper div[role="radiogroup"] {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
+    /* This targets the horizontal radio group we use for main nav */
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] {
+        gap: 0;
     }
-
-    /* Each label = tab */
-    .gold-nav-wrapper div[role="radiogroup"] > label {
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
         cursor: pointer;
-        border-radius: 9999px;
-        padding: 8px 18px;
-        border: 1px solid rgba(15,23,42,0.2);
-        background: #FDE68A;        /* light gold base */
-        margin: 0;
-        display: flex;
-        align-items: center;
-    }
-
-    /* Hide the default radio circle bullet */
-    .gold-nav-wrapper div[role="radiogroup"] > label > div:first-child {
-        width: 0 !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-    }
-
-    /* Text inside the tab */
-    .gold-nav-wrapper div[role="radiogroup"] > label p {
-        font-size: 0.98rem;          /* bigger text */
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        margin: 0;
+        padding: 6px 18px;
+        border-radius: 0;
+        border: 1px solid rgba(15,23,42,0.18);
+        border-bottom: none;
+        background: #FDE68A;   /* light gold */
         color: #111827;
+        margin-right: 0;
     }
-
-    /* Hover state */
-    .gold-nav-wrapper div[role="radiogroup"] > label:hover {
-        background: #FCD34D;
-    }
-
-    /* Selected tab (using :has to detect aria-checked="true") */
-    .gold-nav-wrapper div[role="radiogroup"] > label:has(div[role="radio"][aria-checked="true"]) {
+    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
         background: #ffffff;
-        border-color: #003660;
-        box-shadow: 0 0 0 2px rgba(0,54,96,0.15);
+        border-bottom: 3px solid #ffffff;
+        box-shadow: 0 -2px 0 0 #ffffff;
     }
-    .gold-nav-wrapper div[role="radiogroup"] > label:has(div[role="radio"][aria-checked="true"]) p {
+    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
         color: #003660;
+        font-weight: 700;
+    }
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0;
     }
 
     /* ------- Sidebar: light column like GOLD left section ------- */
@@ -420,10 +402,15 @@ def housing_page():
 # ACADEMICS (advising quick links)
 # ---------------------------
 MAJOR_SHEETS = {
-    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergrad/majors",
-    "Computer Science": "https://www.cs.ucsb.edu/education/undergraduate",
-    "Economics": "https://econ.ucsb.edu/undergrad",
-    "Mathematics": "https://www.math.ucsb.edu/undergrad",
+    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergraduate/majors-minors/stats-and-data-science-major",
+    "Computer Science": "https://cs.ucsb.edu/education/undergraduate/current-students",
+    "Economics": "https://econ.ucsb.edu/programs/undergraduate/majors",
+    "Mathematics": "https://www.math.ucsb.edu/undergraduate/proposed-courses-study-plans",
+    "Biology": "https://ucsbcatalog.coursedog.com/programs/BSBIOSC",
+    "Psychology": "https://psych.ucsb.edu/undergraduate/major-requirements",
+    "Chemistry": "https://undergrad.chem.ucsb.edu/academic-programs/chemistry-bs",
+    "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
+    "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",   
 }
 
 def academics_page():
