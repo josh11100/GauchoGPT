@@ -1,7 +1,8 @@
+# gauchoGPT.py
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
 # A single-file Streamlit web app to help UCSB students with:
-# - Housing in Isla Vista (IV Properties scraper + cleaning)
+# - Housing in Isla Vista (scraper for ivproperties.com with polite headers)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
@@ -10,13 +11,11 @@
 
 from __future__ import annotations
 import re
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 
 try:
@@ -26,8 +25,7 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-# 👉 NEW: import the IV properties parser
-from housingproperties import parse_isla_vista_properties
+from housingproperties import Listing, parse_isla_vista_properties
 
 # ---------------------------
 # Page config
@@ -35,7 +33,7 @@ from housingproperties import parse_isla_vista_properties
 st.set_page_config(
     page_title="gauchoGPT — UCSB helper",
     page_icon="🧢",
-    layout="wide"
+    layout="wide",
 )
 
 # ---------------------------
@@ -102,7 +100,7 @@ HIDE_STREAMLIT_STYLE = """
         color: #374151; /* slate */
         margin-right: 16px;
     }
-    /* Hide the actual radio circle in the top nav */
+    /* hide the actual radio circle in the top nav */
     [data-testid="stHorizontalBlock"] [role="radio"] > div:first-child {
         display: none !important;
     }
@@ -181,7 +179,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-right:6px
     }
     .code {
-        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
         background:#0b1021;
         color:#d1e1ff;
         padding:3px 6px;
@@ -236,7 +234,7 @@ def fetch(url: str, *, timeout: int = 15) -> Optional[requests.Response]:
         return None
 
 # ---------------------------
-# HOUSING (IV Properties, cleaned)
+# HOUSING (ivproperties.com)
 # ---------------------------
 def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
@@ -244,9 +242,9 @@ def housing_page():
 
     col_a, col_b, col_c, col_d, col_e = st.columns([2, 1, 1, 1, 1])
     with col_a:
-        q = st.text_input("Search keyword (optional)", placeholder="Del Playa, 3 bed, studio…")
+        q = st.text_input("Search keyword (optional)", placeholder="2 bed, Del Playa, studio…")
     with col_b:
-        max_price = st.number_input("Max $/mo (optional)", min_value=0, value=0, step=250)
+        max_price = st.number_input("Max $/mo (optional)", min_value=0, value=0, step=50)
     with col_c:
         beds = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4+"], index=0)
     with col_d:
@@ -265,22 +263,19 @@ def housing_page():
 
     if fetch_btn:
         with st.spinner("Contacting ivproperties.com…"):
-            # Use the dedicated Isla Vista properties page
             url = "https://www.ivproperties.com/properties/isla-vista-properties/"
             resp = fetch(url)
             if not resp:
                 return
 
-            listings = parse_isla_vista_properties(resp.text)
+            listings: List[Listing] = parse_isla_vista_properties(resp.text)
 
-            def price_to_int(p: Optional[str]) -> Optional[int]:
-                if not p:
-                    return None
-                m = re.search(r"([\d,]+)", p)
+            def price_to_int(p: str) -> Optional[int]:
+                m = re.search(r"(\$?)([\d,]+)", p)
                 if not m:
                     return None
                 try:
-                    return int(m.group(1).replace(",", ""))
+                    return int(m.group(2).replace(",", ""))
                 except Exception:
                     return None
 
@@ -288,78 +283,68 @@ def housing_page():
             for L in listings:
                 p_int = price_to_int(L.price)
 
-                # Price filter
+                # Filters
                 if max_price and (p_int is not None) and p_int > max_price:
                     continue
 
-                # Bedrooms filter
                 if beds != "Any":
-                    bed_text = (L.bedrooms or "").lower()
-                    if beds == "Studio":
-                        if "studio" not in bed_text:
-                            continue
-                    elif beds == "4+":
-                        m = re.search(r"(\d+)", bed_text)
-                        if not (m and int(m.group(1)) >= 4):
+                    if beds == "4+":
+                        b = re.search(r"(\d+)", L.beds or "")
+                        if not (b and int(b.group(1)) >= 4):
                             continue
                     else:
-                        if beds not in bed_text:
+                        if beds.lower() not in (L.beds or "").lower():
                             continue
 
-                # Sublease filter (IVP page normally doesn't list subleases;
-                # we just look for the word if checkbox is used)
-                if sublease:
-                    status_text = (L.status or "").lower()
-                    if "sublease" not in status_text:
-                        continue
+                row = {
+                    "Title": L.title,
+                    "Address": L.address,
+                    "Price": L.price,
+                    "Beds": L.beds,
+                    "Baths": L.baths,
+                    "Max residents": L.max_residents,
+                    "Status": L.status,
+                    "Link": L.link
+                    if L.link.startswith("http")
+                    else ("https://www.ivproperties.com" + L.link if L.link else ""),
+                }
+                rows.append(row)
 
-                # Keyword filter
-                if q:
-                    q_lower = q.lower()
-                    haystack = " ".join(
-                        [
-                            L.street or "",
-                            L.unit or "",
-                            L.status or "",
-                            L.bedrooms or "",
-                            L.bathrooms or "",
-                            L.utilities or "",
-                        ]
-                    ).lower()
-                    if q_lower not in haystack:
-                        continue
+            # Keyword filter last (title/address/beds/baths/status)
+            if q:
+                q_lower = q.lower()
+                rows = [
+                    r
+                    for r in rows
+                    if q_lower in (r["Title"] or "").lower()
+                    or q_lower in (r["Address"] or "").lower()
+                    or q_lower in (r["Beds"] or "").lower()
+                    or q_lower in (r["Baths"] or "").lower()
+                    or q_lower in (str(r["Status"]) or "").lower()
+                ]
 
-                rows.append(
-                    {
-                        "Property": L.street,
-                        "Unit": L.unit or "",
-                        "Status": L.status,
-                        "Price": L.price or "—",
-                        "Bedrooms": L.bedrooms or "—",
-                        "Bathrooms": L.bathrooms or "—",
-                        "Max residents": L.max_residents or "",
-                        "Link": L.link,
-                    }
-                )
+            if sublease:
+                rows = [
+                    r
+                    for r in rows
+                    if "sublease" in (r["Title"] or "").lower()
+                    or "sublease" in (r["Address"] or "").lower()
+                    or "sublease" in (r["Status"] or "").lower()
+                ]
 
             if not rows:
-                st.info(
-                    "No matching results found. This can happen if filters are very strict "
-                    "(for example, a very low max price). Try clearing or relaxing filters."
-                )
+                st.info("No matching results found, or the site layout changed. Try clearing filters or checking the site directly.")
                 return
 
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True)
 
-            # Also show a simple list of links
             for r in rows:
-                label = f"{r['Property']} {('— ' + r['Unit']) if r['Unit'] else ''}".strip()
                 st.markdown(
-                    f"- [{label}]({r['Link']}) — {r['Price']} · {r['Bedrooms']} · {r['Bathrooms']} · max {r['Max residents']} residents"
+                    f"- [{r['Title']}]({r['Link']}) — {r['Price']} · {r['Beds']} · {r['Baths']} · {r['Address']}"
                 )
 
-            st.success("Fetched Isla Vista listings. Always cross-check availability with the property manager.")
+            st.success("Fetched listings. Always cross-check availability with the property manager.")
 
     with st.expander("⚖️ Legal & ethics (read me)"):
         st.write(
@@ -383,7 +368,7 @@ MAJOR_SHEETS = {
     "Chemistry": "https://undergrad.chem.ucsb.edu/academic-programs/chemistry-bs",
     "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
     "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",
-    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
+    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/",
 }
 
 def academics_page():
@@ -590,25 +575,23 @@ PAGES: Dict[str, Any] = {
 
 st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
 choice = st.radio(
-    "Main navigation",  # visually styled as GOLD tabs by CSS above
+    "Main navigation",
     list(PAGES.keys()),
     horizontal=True,
     index=0,
     key="main_nav",
-    label_visibility="collapsed",  # hide "Main navigation" text
+    label_visibility="collapsed",
 )
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
-# Render the selected page
 PAGES[choice]()
 
-# Sidebar helper text (like GOLD help/info column)
 st.sidebar.divider()
 st.sidebar.markdown(
     """
 **Next steps**
 - Swap placeholder links with official UCSB URLs you trust.
-- Expand the IV housing parser for more features (price per person, maps, etc.).
+- Expand the ivproperties parser for site-specific selectors.
 - Connect an LLM for the Q&A tab.
 """
 )
