@@ -13,3 +13,9 @@ street,unit,avail_start,avail_end,price,bedrooms,bathrooms,max_residents,utiliti
 "6617 Trigo Road, Isla Vista, CA","6617 Trigo Road - Unit A","7/11/26","6/19/27",5900,2,1.5,4,"Water, Landscape Maintenance","Pet friendly",True,"Available",False
 "6643 Trigo Road, Isla Vista, CA","6643 Trigo Road - Unit B","7/11/26","6/19/27",6000,2,1,5,"Water, Landscape Maintenance","Pet friendly",True,"Available",False
 "6645 Trigo Road, Isla Vista, CA","6645 Trigo Road - Unit A","7/11/26","6/19/27",6000,2,1,5,"Water, Landscape Maintenance","Pet friendly",True,"Available",False
+
+street,unit,avail_start,avail_end,price,bedrooms,bathrooms,max_residents,utilities,pet_policy,pet_friendly,status
+"6522 Del Playa Drive, Isla Vista, CA","6522 Del Playa Drive - Unit A","7/11/26","6/19/27",8700,3,2,6,"Landscape Maintenance","No pets",False,available
+"6710 Pasado Road, Isla Vista, CA","6710 Pasado Road - Unit 1","7/11/26","6/19/27",5100,2,1.5,4,"Water, Trash, Landscape Maintenance","Pet friendly",True,available
+"6731 Pasado Road, Isla Vista, CA","6731 Pasado Road - Unit B","7/11/26","6/19/27",6000,2,1,5,"Water, Landscape Maintenance","Pet friendly",True,available
+...
