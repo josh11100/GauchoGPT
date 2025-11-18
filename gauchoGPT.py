@@ -1,7 +1,7 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
 # A single-file Streamlit web app to help UCSB students with:
-# - Housing in Isla Vista (scraper for ivproperties Isla Vista page)
+# - Housing in Isla Vista (local CSV snapshot from ivproperties.com)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
@@ -9,14 +9,17 @@
 # ------------------------------------------------------------
 
 from __future__ import annotations
-import re
+import math
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
+
+# If you ever want HTTP scraping again you can re-enable these:
+# import requests
+# from bs4 import BeautifulSoup
+# from urllib.parse import quote_plus
 from urllib.parse import quote_plus
 
 try:
@@ -77,7 +80,7 @@ HIDE_STREAMLIT_STYLE = """
         opacity: 0.9;
     }
 
-    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    /* ------- Second bar: GOLD navigation tabs ------- */
     .gold-nav-wrapper {
         width: 100%;
         background: #FDB515; /* UCSB gold */
@@ -86,7 +89,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-bottom: 12px;
     }
 
-    /* Make the radio look like GOLD tabs (hide circles, style labels) */
+    /* Style the Streamlit radio as tab buttons */
     [data-testid="stHorizontalBlock"] [role="radiogroup"] {
         gap: 0;
     }
@@ -94,31 +97,30 @@ HIDE_STREAMLIT_STYLE = """
         cursor: pointer;
         padding: 10px 22px;
         border-radius: 0;
-        border: none;
-        background: #F6C453;   /* light-ish gold */
+        border: 1px solid rgba(15,23,42,0.18);
+        border-bottom: none;
+        background: #FDE68A;   /* light gold */
         color: #111827;
         margin-right: 0;
     }
-    /* remove the default radio circles */
-    [data-testid="stHorizontalBlock"] [role="radio"] > div:first-child {
-        display: none;
-    }
-    [data-testid="stHorizontalBlock"] [role="radio"] p {
-        font-size: 0.9rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        margin-bottom: 0;
-    }
     [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
-        background: #FBBF24;
-        box-shadow: inset 0 -3px 0 0 #D97706;
+        background: #ffffff;
+        border-bottom: 3px solid #ffffff;
+        box-shadow: 0 -2px 0 0 #ffffff;
     }
     [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
         color: #003660;
+        font-weight: 700;
+    }
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0;
     }
 
-    /* ------- Sidebar: light column like GOLD left section ------- */
+    /* ------- Sidebar ------- */
     [data-testid="stSidebar"] {
         background: #f3f4f6;
         border-right: 1px solid #d1d5db;
@@ -149,7 +151,7 @@ HIDE_STREAMLIT_STYLE = """
         color: #111827;
     }
 
-    /* ------- Tables / cards look closer to GOLD ------- */
+    /* ------- Tables / cards ------- */
     .stDataFrame thead tr th {
         background-color: #003660 !important;
         color: #f9fafb !important;
@@ -166,6 +168,27 @@ HIDE_STREAMLIT_STYLE = """
         font-weight:600;
         margin-right:8px;
     }
+    .status-pill {
+        display:inline-block;
+        padding:2px 8px;
+        border-radius:9999px;
+        font-weight:600;
+        font-size:0.8rem;
+        margin-right:6px;
+    }
+    .status-available {
+        background:#dcfce7;
+        color:#15803d;
+    }
+    .status-processing {
+        background:#fef3c7;
+        color:#92400e;
+    }
+    .status-leased {
+        background:#fee2e2;
+        color:#b91c1c;
+    }
+
     .tag  {
         display:inline-block;
         padding:2px 8px;
@@ -206,166 +229,261 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar info
+# Sidebar info (not main nav anymore)
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing • classes • professors • aid • jobs")
 
 # ---------------------------
-# Utilities
+# Housing data loader (CSV snapshot)
 # ---------------------------
-UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/119.0 Safari/537.36"
-)
-
-def fetch(url: str, *, timeout: int = 20) -> Optional[requests.Response]:
-    try:
-        r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout)
-        if r.status_code == 200:
-            return r
-        st.warning(f"Request to {url} returned status {r.status_code}")
-        return None
-    except Exception as e:
-        st.error(f"Network error: {e}")
-        return None
-
-# ---------------------------
-# HOUSING (static CSV from IV Properties 2026–27)
-# ---------------------------
-
-HOUSING_CSV = "iv_housing_2026_27.csv"
-
 
 @st.cache_data
-def load_housing() -> pd.DataFrame:
-    """Load the local IV housing snapshot."""
-    df = pd.read_csv(HOUSING_CSV)
+def load_housing_data(path: str = "iv_housing_2026_27.csv") -> pd.DataFrame:
+    """
+    Load and clean local housing snapshot.
+    Expected columns:
+    street,unit,avail_start,avail_end,price,bedrooms,bathrooms,max_residents,
+    utilities,pet_policy,pet_friendly
+    Optional: status,is_studio
+    """
+    df = pd.read_csv(path)
 
-    # force numeric types where we care about filtering
-    df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
-    df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
-    df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
-    df["pet_friendly"] = df["pet_friendly"].astype(bool)
+    # Basic numeric cleaning
+    for col in ["price", "bedrooms", "bathrooms", "max_residents"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "pet_friendly" in df.columns:
+        df["pet_friendly"] = df["pet_friendly"].astype(bool)
+
+    # Lease term label
+    df["lease_term"] = df["avail_start"].fillna("").astype(str) + "–" + df["avail_end"].fillna("").astype(str)
+
+    # If status not provided, default to "Available"
+    if "status" not in df.columns:
+        df["status"] = "Available"
+
+    # If studio flag not provided, infer from bedrooms == 0
+    if "is_studio" not in df.columns:
+        df["is_studio"] = df["bedrooms"].fillna(0) == 0
+
+    # Price per resident (if possible)
+    if "price" in df.columns and "max_residents" in df.columns:
+        df["price_per_person"] = (df["price"] / df["max_residents"]).round(0)
+    else:
+        df["price_per_person"] = None
 
     return df
 
 
+# ---------------------------
+# HOUSING (IV) — uses local CSV instead of live scraping
+# ---------------------------
+
 def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
+
     st.caption(
         "Data loaded from a local snapshot of IV Properties' Isla Vista page "
         "for the 2026–27 term. Always verify details with the property manager."
     )
 
-    df = load_housing()
+    df = load_housing_data()
 
-    # ---- filters ----
-    col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
-    with col_a:
-        q = st.text_input(
+    # ---- Filters row ----
+    col_search, col_price, col_beds, col_pet, col_status = st.columns([2.2, 1.1, 1, 1, 1])
+
+    with col_search:
+        search = st.text_input(
             "Search keyword (optional)",
-            placeholder="Del Playa, Pasado, studio…",
-        )
-    with col_b:
+            placeholder="Del Playa, Pasado, studio, 3 bed…",
+        ).strip()
+
+    with col_price:
         max_price = st.number_input(
             "Max $/mo (optional)",
             min_value=0,
             value=0,
             step=100,
         )
-    with col_c:
-        beds = st.selectbox(
+
+    with col_beds:
+        bed_choice = st.selectbox(
             "Bedrooms",
-            ["Any", "Studio", "1", "2", "3", "4+"],
+            ["Any", "Studio", "1", "2", "3", "4", "5+"],
             index=0,
         )
-    with col_d:
-        pet = st.selectbox(
+
+    with col_pet:
+        pet_choice = st.selectbox(
             "Pet policy",
-            ["Any", "Pet friendly only", "No pets only"],
+            ["Any", "Pet friendly", "No pets"],
             index=0,
         )
 
-    st.markdown(
-        """
-        <div class='small muted'>
-        <span class='pill'>Source</span>
-        iv_housing_2026_27.csv (snapshot) · Always confirm price & availability with the property manager.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with col_status:
+        status_choice = st.selectbox(
+            "Applications",
+            ["Any", "Available", "Processing applications", "Currently leased"],
+            index=0,
+        )
 
-    # ---- apply filters ----
+    # ---- Apply filters ----
     filtered = df.copy()
 
-    # keyword against street + unit
-    if q:
-        q_lower = q.lower()
+    if search:
+        s = search.lower()
         mask = (
-            filtered["street"].str.lower().str.contains(q_lower)
-            | filtered["unit"].str.lower().str.contains(q_lower)
+            filtered["street"].str.lower().str.contains(s)
+            | filtered["unit"].str.lower().str.contains(s)
         )
         filtered = filtered[mask]
 
-    # price filter
-    if max_price:
-        filtered = filtered[filtered["price"] <= max_price]
+    if max_price and "price" in filtered.columns:
+        filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= max_price)]
 
-    # bedroom filter
-    if beds != "Any":
-        if beds == "Studio":
-            filtered = filtered[filtered["bedrooms"] == 0]
-        elif beds == "4+":
-            filtered = filtered[filtered["bedrooms"] >= 4]
+    if bed_choice != "Any":
+        if bed_choice == "Studio":
+            filtered = filtered[filtered["is_studio"]]
+        elif bed_choice == "5+":
+            filtered = filtered[filtered["bedrooms"] >= 5]
         else:
-            filtered = filtered[filtered["bedrooms"] == int(beds)]
+            filtered = filtered[filtered["bedrooms"] == int(bed_choice)]
 
-    # pet policy filter
-    if pet == "Pet friendly only":
-        filtered = filtered[filtered["pet_friendly"] == True]
-    elif pet == "No pets only":
-        filtered = filtered[filtered["pet_friendly"] == False]
+    if pet_choice != "Any":
+        if pet_choice == "Pet friendly":
+            filtered = filtered[filtered["pet_friendly"]]
+        elif pet_choice == "No pets":
+            filtered = filtered[filtered["pet_policy"].str.contains("No pets", na=False)]
+
+    if status_choice != "Any":
+        # normalize for safety
+        filtered = filtered[
+            filtered["status"].str.lower().str.contains(status_choice.split()[0].lower(), na=False)
+        ]
+
+    # ---- Summary row ----
+    st.markdown("### Snapshot summary")
+
+    total_units = len(df)
+    shown_units = len(filtered)
+
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Units shown", shown_units, f"of {total_units} total")
+    with col_b:
+        if "price" in filtered.columns and not filtered["price"].isna().all():
+            st.metric("Median monthly price", f"${int(filtered['price'].median()):,}")
+        else:
+            st.metric("Median monthly price", "—")
+    with col_c:
+        if "price_per_person" in filtered.columns and not filtered["price_per_person"].isna().all():
+            st.metric("Median price per person", f"${int(filtered['price_per_person'].median()):,}")
+        else:
+            st.metric("Median price per person", "—")
+
+    st.markdown("---")
+
+    # ---- Data table ----
+    st.subheader("Table view")
+
+    table_cols = [
+        "street",
+        "unit",
+        "status",
+        "lease_term",
+        "price",
+        "price_per_person",
+        "bedrooms",
+        "bathrooms",
+        "max_residents",
+        "pet_policy",
+    ]
+    existing_cols = [c for c in table_cols if c in filtered.columns]
+
+    st.dataframe(
+        filtered[existing_cols].reset_index(drop=True),
+        use_container_width=True,
+        height=360,
+    )
+
+    # ---- Card-style listing view ----
+    st.markdown("### Listings")
 
     if filtered.empty:
         st.info(
-            "No matching results in the local snapshot. "
-            "Try loosening your filters or updating the CSV."
+            "No matching results found with the current filters. "
+            "Try clearing filters or checking the site directly."
         )
-        return
+    else:
+        for _, row in filtered.iterrows():
+            street = row.get("street", "")
+            unit = row.get("unit", "")
+            price = row.get("price", None)
+            price_pp = row.get("price_per_person", None)
+            beds = row.get("bedrooms", None)
+            baths = row.get("bathrooms", None)
+            max_res = row.get("max_residents", None)
+            lease = row.get("lease_term", "")
+            utilities = row.get("utilities", "")
+            pet_policy = row.get("pet_policy", "")
+            status = (row.get("status", "Available") or "Available").strip()
+            is_studio = bool(row.get("is_studio", False))
 
-    # table view
-    st.dataframe(
-        filtered[
-            [
-                "street",
-                "unit",
-                "price",
-                "bedrooms",
-                "bathrooms",
-                "max_residents",
-                "utilities",
-                "pet_policy",
-            ]
-        ],
-        use_container_width=True,
-    )
+            if status.lower().startswith("available"):
+                status_class = "status-available"
+                status_label = "Available"
+            elif "process" in status.lower():
+                status_class = "status-processing"
+                status_label = "Processing applications"
+            elif "lease" in status.lower():
+                status_class = "status-leased"
+                status_label = "Currently leased"
+            else:
+                status_class = "status-processing"
+                status_label = status
 
-    # nice bullet list view
-    st.subheader("Listings")
-    for _, r in filtered.iterrows():
-        price_str = f"${int(r['price']):,}/installment"
-        beds_str = f"{int(r['bedrooms'])} bed" if r["bedrooms"] > 0 else "Studio"
-        line = (
-            f"**{r['unit']}** — {price_str} · "
-            f"{beds_str} / {r['bathrooms']} bath · "
-            f"Max {int(r['max_residents'])} residents  \n"
-            f"{r['street']}  \n"
-            f"Included utilities: {r['utilities']} · {r['pet_policy']}"
+            room_label = "Studio" if is_studio or (beds == 0) else f"{int(beds)} bed" if not pd.isna(beds) else "—"
+            bath_label = f"{baths} bath" if not pd.isna(baths) else "—"
+            max_res_label = f"Max {int(max_res)} residents" if not pd.isna(max_res) else ""
+
+            price_str = f"${int(price):,}/installment" if not pd.isna(price) else "Price not listed"
+            price_pp_str = (
+                f" (${int(price_pp):,} per resident)" if price_pp and not pd.isna(price_pp) else ""
+            )
+
+            st.markdown(
+                f"""
+                <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px 14px; margin-bottom:10px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <div style="font-weight:600; color:#111827;">{street}</div>
+                    <div class="status-pill {status_class}">{status_label}</div>
+                  </div>
+                  <div style="font-size:0.92rem; color:#374151; margin-bottom:4px;">
+                    <span style="font-weight:600;">{unit}</span>
+                  </div>
+                  <div style="font-size:0.9rem; color:#4b5563; margin-bottom:4px;">
+                    {price_str}{price_pp_str}<br/>
+                    {room_label} · {bath_label} · {max_res_label}<br/>
+                    Lease term: {lease}
+                  </div>
+                  <div style="font-size:0.85rem; color:#6b7280;">
+                    Utilities: {utilities or "—"} · Pet policy: {pet_policy or "—"}
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with st.expander("⚖️ Legal & ethics (read me)"):
+        st.write(
+            """
+            • Data here is a static snapshot you copied from ivproperties.com for the 2026–27 lease term.  
+            • Always confirm **current** price and availability with the property manager.  
+            • If you update the CSV, reload the app to refresh the numbers.  
+            """
         )
-        st.markdown("- " + line)
+
 
 # ---------------------------
 # ACADEMICS (advising quick links)
@@ -380,14 +498,12 @@ MAJOR_SHEETS = {
     "Chemistry": "https://undergrad.chem.ucsb.edu/academic-programs/chemistry-bs",
     "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
     "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",
-    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/",
+    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
 }
 
 def academics_page():
     st.header("🎓 Academics — advising quick links")
-    st.caption(
-        "Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links."
-    )
+    st.caption("Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links.")
 
     col1, col2 = st.columns([1.2, 2])
     with col1:
@@ -447,6 +563,7 @@ def academics_page():
     with st.expander("🔗 Add more official links"):
         st.write("Paste your department URLs here for quick access in future iterations.")
 
+
 # ---------------------------
 # CLASS LOCATION (map)
 # ---------------------------
@@ -469,13 +586,11 @@ def locator_page():
         folium.Marker([lat, lon], tooltip=bname).add_to(m)
         st_folium(m, width=900, height=500)
     else:
-        st.info(
-            "Install folium + streamlit-folium for the interactive map:\n"
-            "`pip install folium streamlit-folium`"
-        )
+        st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
         st.write({"building": bname, "lat": lat, "lon": lon})
 
-    st.caption("Tip: A future version could load your GOLD schedule and auto-pin buildings.")
+    st.caption("Tip: You can load your full schedule and auto-pin buildings in a future version.")
+
 
 # ---------------------------
 # PROFESSORS (RMP + dept)
@@ -505,11 +620,12 @@ def profs_page():
     st.markdown(
         """
         - Syllabi from prior quarters (grading, workload, curve)  
-        - RMP comments: focus on **recent** terms and specific anecdotes  
+        - RMP comments: look for **recent** terms and specific anecdotes  
         - Department Discord/Slack/Reddit for up-to-date tips  
-        - Talk to students who recently took the course
+        - Talk to students who recently took the course  
         """
     )
+
 
 # ---------------------------
 # FINANCIAL AID & JOBS
@@ -541,17 +657,18 @@ def aid_jobs_page():
     with st.expander("How to get a job quickly"):
         st.markdown(
             """
-            1. Set up your **Handshake** profile and upload your resume.  
-            2. Filter by *On-campus* or *Work-study eligible*.  
-            3. Apply to 5–10 postings and follow up.  
-            4. Visit department offices; ask about openings.  
-            5. Consider research assistant roles if you have relevant skills.
+            1) Set up your **Handshake** profile, upload resume.  
+            2) Filter by *On-campus* or *Work-study eligible*.  
+            3) Apply to 5–10 postings and follow up.  
+            4) Visit department offices; ask about openings.  
+            5) Consider research assistant roles if you have relevant skills.  
             """
         )
 
     st.subheader("Quick links")
     for label, url in AID_LINKS.items():
         st.link_button(label, url)
+
 
 # ---------------------------
 # Q&A placeholder
@@ -560,10 +677,7 @@ def qa_page():
     st.header("💬 Ask gauchoGPT (placeholder)")
     st.caption("Wire this to your preferred LLM API or a local model.")
 
-    prompt = st.text_area(
-        "Ask a UCSB question",
-        placeholder="e.g., How do I switch into the STAT&DS major?"
-    )
+    prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
         st.info("Connect to an API (e.g., OpenAI, Anthropic) or a local model here.")
         st.code(
@@ -580,6 +694,7 @@ def qa_page():
             """,
             language="python",
         )
+
 
 # ---------------------------
 # GOLD-style main navigation
@@ -601,9 +716,9 @@ choice = st.radio(
     index=0,
     key="main_nav",
 )
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# Render selected page
+# Render the selected page
 PAGES[choice]()
 
 # Sidebar helper text (like GOLD help/info column)
@@ -611,9 +726,9 @@ st.sidebar.divider()
 st.sidebar.markdown(
     """
 **Next steps**
-- Swap placeholder links with official UCSB URLs you trust.  
-- Tighten up the Isla Vista parser (add more fields, caching, error handling).  
+- Keep your housing CSV snapshot up to date each year.
+- Expand to other property managers or build a combined dataset.
+- Add analytics pages (rent trends, price per street, etc.).
 - Connect an LLM for the Q&A tab.
 """
 )
-
