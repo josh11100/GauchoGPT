@@ -231,259 +231,141 @@ def fetch(url: str, *, timeout: int = 20) -> Optional[requests.Response]:
         return None
 
 # ---------------------------
-# HOUSING (ivproperties.com — text parser)
+# HOUSING (static CSV from IV Properties 2026–27)
 # ---------------------------
 
-@dataclass
-class Listing:
-    title: str
-    address: str
-    price: str
-    beds: str
-    baths: str
-    status: str
+HOUSING_CSV = "iv_housing_2026_27.csv"
 
-def parse_isla_vista_properties(html: str) -> List[Listing]:
-    """
-    Parse IV Properties' Isla Vista page by turning it into plain text lines
-    and extracting structured info.
 
-    This does NOT depend on specific CSS classes, just the text patterns like:
-    '6522 Del Playa Drive, Isla Vista, CA'
-    '6522 Del Playa Drive - Unit A'
-    '$8,700/installment'
-    '3 bedrooms'
-    '2 bathrooms'
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text("\n", strip=True)
-    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+@st.cache_data
+def load_housing() -> pd.DataFrame:
+    """Load the local IV housing snapshot."""
+    df = pd.read_csv(HOUSING_CSV)
 
-    listings: List[Listing] = []
-    current_address = ""
+    # force numeric types where we care about filtering
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
+    df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
+    df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
+    df["pet_friendly"] = df["pet_friendly"].astype(bool)
 
-    i = 0
-    while i < len(lines):
-        line = lines[i]
+    return df
 
-        # Address line
-        if line.endswith("Isla Vista, CA"):
-            current_address = line
-            i += 1
-            continue
-
-        # Unit / house line
-        if " - Unit " in line or " - Main House" in line:
-            unit_name = line
-            status = ""
-            price = ""
-            beds = ""
-            baths = ""
-
-            j = i + 1
-            while j < len(lines):
-                l2 = lines[j]
-                low = l2.lower()
-
-                # Stop when next address or next unit header starts
-                if l2.endswith("Isla Vista, CA") or " - Unit " in l2 or " - Main House" in l2:
-                    break
-
-                if not status and (
-                    "available for" in low
-                    or "currently leased" in low
-                    or "processing applications" in low
-                ):
-                    status = l2
-                if not price and "$" in l2:
-                    price = l2
-                if not beds and "bedroom" in low:
-                    beds = l2
-                if not baths and "bathroom" in low:
-                    baths = l2
-
-                j += 1
-
-            listings.append(
-                Listing(
-                    title=unit_name,
-                    address=current_address or "Isla Vista, CA",
-                    price=price or "See details",
-                    beds=beds or "See details",
-                    baths=baths or "See details",
-                    status=status or "",
-                )
-            )
-            i = j
-            continue
-
-        # Some properties (like whole houses) may not have "Unit" in the title.
-        # Try to catch simple patterns: address repeated + status + beds/baths.
-        if current_address and line == current_address:
-            # Look ahead a bit for status / beds / baths.
-            status = ""
-            price = ""
-            beds = ""
-            baths = ""
-            j = i + 1
-            while j < len(lines) and j < i + 12:  # small window
-                l2 = lines[j]
-                low = l2.lower()
-
-                if l2.endswith("Isla Vista, CA"):
-                    break
-                if not status and (
-                    "available for" in low
-                    or "currently leased" in low
-                    or "processing applications" in low
-                ):
-                    status = l2
-                if not price and "$" in l2:
-                    price = l2
-                if not beds and "bedroom" in low:
-                    beds = l2
-                if not baths and "bathroom" in low:
-                    baths = l2
-                j += 1
-
-            if status or beds or baths or price:
-                listings.append(
-                    Listing(
-                        title=current_address,
-                        address=current_address,
-                        price=price or "See details",
-                        beds=beds or "See details",
-                        baths=baths or "See details",
-                        status=status or "",
-                    )
-                )
-                i = j
-                continue
-
-        i += 1
-
-    return listings
 
 def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
     st.caption(
-        "Data pulled from IV Properties' Isla Vista page for the 2026–27 term. "
-        "Always verify details with the property manager."
+        "Data loaded from a local snapshot of IV Properties' Isla Vista page "
+        "for the 2026–27 term. Always verify details with the property manager."
     )
 
-    col_a, col_b, col_c, col_d, col_e = st.columns([2, 1, 1, 1, 1])
+    df = load_housing()
+
+    # ---- filters ----
+    col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
     with col_a:
-        q = st.text_input("Search keyword (optional)", placeholder="2 bed, Del Playa, studio…")
+        q = st.text_input(
+            "Search keyword (optional)",
+            placeholder="Del Playa, Pasado, studio…",
+        )
     with col_b:
-        max_price = st.number_input("Max $/mo (optional)", min_value=0, value=0, step=50)
+        max_price = st.number_input(
+            "Max $/mo (optional)",
+            min_value=0,
+            value=0,
+            step=100,
+        )
     with col_c:
-        beds_filter = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4+"], index=0)
+        beds = st.selectbox(
+            "Bedrooms",
+            ["Any", "Studio", "1", "2", "3", "4+"],
+            index=0,
+        )
     with col_d:
-        sublease = st.checkbox("Sublease")
-    with col_e:
-        fetch_btn = st.button("Fetch IVProperties")
+        pet = st.selectbox(
+            "Pet policy",
+            ["Any", "Pet friendly only", "No pets only"],
+            index=0,
+        )
 
     st.markdown(
         """
         <div class='small muted'>
-        <span class='pill'>Source</span> ivproperties.com · Respect robots.txt · Use responsibly
+        <span class='pill'>Source</span>
+        iv_housing_2026_27.csv (snapshot) · Always confirm price & availability with the property manager.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    if not fetch_btn:
+    # ---- apply filters ----
+    filtered = df.copy()
+
+    # keyword against street + unit
+    if q:
+        q_lower = q.lower()
+        mask = (
+            filtered["street"].str.lower().str.contains(q_lower)
+            | filtered["unit"].str.lower().str.contains(q_lower)
+        )
+        filtered = filtered[mask]
+
+    # price filter
+    if max_price:
+        filtered = filtered[filtered["price"] <= max_price]
+
+    # bedroom filter
+    if beds != "Any":
+        if beds == "Studio":
+            filtered = filtered[filtered["bedrooms"] == 0]
+        elif beds == "4+":
+            filtered = filtered[filtered["bedrooms"] >= 4]
+        else:
+            filtered = filtered[filtered["bedrooms"] == int(beds)]
+
+    # pet policy filter
+    if pet == "Pet friendly only":
+        filtered = filtered[filtered["pet_friendly"] == True]
+    elif pet == "No pets only":
+        filtered = filtered[filtered["pet_friendly"] == False]
+
+    if filtered.empty:
+        st.info(
+            "No matching results in the local snapshot. "
+            "Try loosening your filters or updating the CSV."
+        )
         return
 
-    with st.spinner("Contacting ivproperties.com…"):
-        url = "https://www.ivproperties.com/properties/isla-vista-properties/"
-        resp = fetch(url)
-        if not resp:
-            return
-
-        listings = parse_isla_vista_properties(resp.text)
-
-        if not listings:
-            st.info(
-                "No matching results parsed. The site layout may have changed — "
-                "check the site directly."
-            )
-            return
-
-        # Convert to DataFrame for filtering
-        rows = []
-        for L in listings:
-            rows.append(
-                {
-                    "Title": L.title,
-                    "Address": L.address,
-                    "Price": L.price,
-                    "Beds": L.beds,
-                    "Baths": L.baths,
-                    "Status": L.status,
-                }
-            )
-
-        df = pd.DataFrame(rows)
-
-        # Helper: extract numeric price from strings like "$8,700/installment"
-        def price_to_int(p: str) -> Optional[int]:
-            m = re.search(r"([\d,]+)", p)
-            if not m:
-                return None
-            try:
-                return int(m.group(1).replace(",", ""))
-            except Exception:
-                return None
-
-        # Apply filters
-        if max_price:
-            mask = df["Price"].apply(
-                lambda s: (price_to_int(str(s)) or 10**9) <= max_price
-            )
-            df = df[mask]
-
-        if beds_filter != "Any":
-            if beds_filter == "4+":
-                def _beds_ok(val: str) -> bool:
-                    m = re.search(r"(\d+)", str(val))
-                    return bool(m and int(m.group(1)) >= 4)
-                df = df[df["Beds"].apply(_beds_ok)]
-            else:
-                df = df[df["Beds"].str.contains(beds_filter, case=False, na=False)]
-
-        if q:
-            q_low = q.lower()
-            df = df[
-                df["Title"].str.lower().str.contains(q_low, na=False)
-                | df["Address"].str.lower().str.contains(q_low, na=False)
-                | df["Beds"].str.lower().str.contains(q_low, na=False)
-                | df["Baths"].str.lower().str.contains(q_low, na=False)
+    # table view
+    st.dataframe(
+        filtered[
+            [
+                "street",
+                "unit",
+                "price",
+                "bedrooms",
+                "bathrooms",
+                "max_residents",
+                "utilities",
+                "pet_policy",
             ]
+        ],
+        use_container_width=True,
+    )
 
-        # Sublease filter – IVP page probably doesn't mention sublease,
-        # but keep this so the UI doesn't break.
-        if sublease:
-            df = df[df["Status"].str.lower().str.contains("sublease", na=False)]
-
-        if df.empty:
-            st.info(
-                "No matching results found for these filters. "
-                "Try a higher max price or clear the keyword."
-            )
-            return
-
-        st.dataframe(df, use_container_width=True)
-        st.success("Listings loaded. Always cross-check availability with IV Properties.")
-
-    with st.expander("⚖️ Legal & ethics (read me)"):
-        st.write(
-            """
-            • Scraping public pages can break if the site changes. Keep requests minimal and cached.  
-            • Check each site's **Terms of Service** and **robots.txt**. If scraping is disallowed, remove it.  
-            • Prefer official APIs or email the property manager for a feed.
-            """
+    # nice bullet list view
+    st.subheader("Listings")
+    for _, r in filtered.iterrows():
+        price_str = f"${int(r['price']):,}/installment"
+        beds_str = f"{int(r['bedrooms'])} bed" if r["bedrooms"] > 0 else "Studio"
+        line = (
+            f"**{r['unit']}** — {price_str} · "
+            f"{beds_str} / {r['bathrooms']} bath · "
+            f"Max {int(r['max_residents'])} residents  \n"
+            f"{r['street']}  \n"
+            f"Included utilities: {r['utilities']} · {r['pet_policy']}"
         )
+        st.markdown("- " + line)
 
 # ---------------------------
 # ACADEMICS (advising quick links)
@@ -734,3 +616,4 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
+
