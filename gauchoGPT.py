@@ -414,7 +414,6 @@ MAJOR_SHEETS = {
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
     
 }
-
 def academics_page():
     st.header("🎓 Academics — advising quick links")
     st.caption("Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links.")
@@ -424,26 +423,45 @@ def academics_page():
         major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
+
         st.subheader("Most asked questions")
-        st.markdown(
-            """
-            - **Still lost on what classes to take?**  
-              Talk to your department’s advisor. Using the **Open major planning page** button above, you should be able to find official advising info and schedule an appointment.
 
-            - **Can’t find your specific major on this site?**  
-              Go to the **Help / Feedback** tab in this app and send us a request so we can update the major list and add the correct links.
+        # Q&A as interactive expanders
+        with st.expander("Still lost on what classes to take?"):
+            st.markdown(
+                """
+                Talk to your department’s advisor. Using the **Open major planning page** button
+                above, you should be able to find official advising info and schedule an appointment.
+                """
+            )
 
-            - **Not sure how many classes to take in a quarter?**  
-              A common pattern is 1–2 heavier technical courses plus 1 lighter GE, but always confirm with your advisor and check your major’s sample plan.
+        with st.expander("Can’t find your specific major on this site?"):
+            st.markdown(
+                """
+                Go to the **Help / Feedback** tab in this app and send us a request so we can
+                update the major list and add the correct links.
+                """
+            )
 
-            - **Class is full or waitlisted — what now?**  
-              Use the GOLD waitlist, watch for enrollment changes before the quarter starts, and email the instructor or department for waitlist/add-code policies.
-            """
-        )
+        with st.expander("Not sure how many classes to take in a quarter?"):
+            st.markdown(
+                """
+                A common pattern is **1–2 heavier technical courses plus 1 lighter GE**, but always
+                confirm with your advisor and check your major’s sample plan for your major.
+                """
+            )
+
+        with st.expander("Class is full or waitlisted — what now?"):
+            st.markdown(
+                """
+                Use the **GOLD waitlist**, watch for enrollment changes before the quarter starts, and
+                email the instructor or department to ask about waitlist/add-code policies.
+                """
+            )
 
     with col2:
         st.subheader("Build your quarter (scratchpad)")
-        data = st.experimental_data_editor(
+        data = st.data_editor(  # 👈 use st.data_editor instead of experimental_*
             pd.DataFrame(
                 [
                     {"Course": "PSTAT 120A", "Units": 4, "Type": "Major"},
