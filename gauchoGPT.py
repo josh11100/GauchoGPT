@@ -411,6 +411,8 @@ MAJOR_SHEETS = {
     "Chemistry": "https://undergrad.chem.ucsb.edu/academic-programs/chemistry-bs",
     "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
     "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",   
+    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
+    
 }
 
 def academics_page():
@@ -419,18 +421,26 @@ def academics_page():
 
     col1, col2 = st.columns([1.2, 2])
     with col1:
-        major = st.selectbox("Pick a major", list(MAJOR_SHEETS.keys()))
+        major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
-        st.subheader("General tips")
+        st.subheader("Most asked questions")
         st.markdown(
             """
-            - Check for **pre-major** vs **full major** requirements early.
-            - Balance load: 1–2 heavy technicals + 1 lighter GE when possible.
-            - Use GOLD waitlist smartly; watch enrollment windows.
-            - Talk to advisors and upperclassmen in your dept Discord/Slack.
+            - **Still lost on what classes to take?**  
+              Talk to your department’s advisor. Using the **Open major planning page** button above, you should be able to find official advising info and schedule an appointment.
+
+            - **Can’t find your specific major on this site?**  
+              Go to the **Help / Feedback** tab in this app and send us a request so we can update the major list and add the correct links.
+
+            - **Not sure how many classes to take in a quarter?**  
+              A common pattern is 1–2 heavier technical courses plus 1 lighter GE, but always confirm with your advisor and check your major’s sample plan.
+
+            - **Class is full or waitlisted — what now?**  
+              Use the GOLD waitlist, watch for enrollment changes before the quarter starts, and email the instructor or department for waitlist/add-code policies.
             """
         )
+
     with col2:
         st.subheader("Build your quarter (scratchpad)")
         data = st.experimental_data_editor(
