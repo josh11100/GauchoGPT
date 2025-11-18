@@ -1,147 +1,152 @@
 # housingproperties.py
-# Parser + feature extractor for:
-# https://www.ivproperties.com/properties/isla-vista-properties/
+# Helpers for scraping & cleaning Isla Vista listings from ivproperties.com
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import List, Optional
 import re
 
-from bs4 import BeautifulSoup, Tag
-
-BASE_URL = "https://www.ivproperties.com"
+from bs4 import BeautifulSoup
 
 
 @dataclass
 class Listing:
-    street: str
-    unit: Optional[str]
-    status: str
-    price: Optional[str]
-    bedrooms: Optional[str]
-    bathrooms: Optional[str]
-    max_residents: Optional[int]
-    utilities: Optional[str]
-    pet_friendly: Optional[bool]
+    title: str
+    address: str
+    price: str
+    beds: str
+    baths: str
     link: str
+    status: str = ""
+    max_residents: Optional[int] = None
+    pets: str = ""
+    utilities: str = ""
 
 
-def _looks_like_iv_address(text: str) -> bool:
-    """Heuristic to skip random <h2> headings and only keep property blocks."""
-    text = text.lower()
-    if "isla vista" in text:
-        return True
-    # Some addresses on the page omit "Isla Vista" in the <h2> text
-    for street in [
-        "del playa", "el nido", "fortuna", "pasado", "picasso",
-        "sabado tarde", "sueno", "trigo"
-    ]:
-        if street in text:
-            return True
-    return False
+def _to_int(text: str) -> Optional[int]:
+    if not text:
+        return None
+    m = re.search(r"(\d+)", text.replace(",", ""))
+    return int(m.group(1)) if m else None
 
 
-def parse_isla_vista_properties(html: str) -> List[Listing]:
+def parse_isla_vista_properties(
+    html: str,
+    base_url: str = "https://www.ivproperties.com",
+) -> List[Listing]:
     """
     Parse the Isla Vista properties page into a list of Listing objects.
 
-    We assume each property block looks roughly like:
-        <h2>6512 Del Playa Drive, Isla Vista, CA</h2>
-        <img ...>
-        <h3>6512 Del Playa Drive - Unit 1</h3>
-        <p>Status line...</p>
-        <p>$8,700/installment</p>
-        <p>3 bedrooms</p>
-        <p>2 bathrooms</p>
-        <p>Maximum 6 residents</p>
-        <p>Included Utilities: ...</p>
-        <p>Pet friendly / No pets</p>
-        <a>More details</a>
-        ...
+    This is tailored to:
+    https://www.ivproperties.com/properties/isla-vista-properties/
     """
+
     soup = BeautifulSoup(html, "html.parser")
     listings: List[Listing] = []
 
-    # Iterate over all h2 headings that look like property addresses
-    for h2 in soup.find_all("h2"):
-        addr = h2.get_text(strip=True)
-        if not _looks_like_iv_address(addr):
+    # The structure of the page is:
+    #   <h2> Street, Isla Vista, CA </h2>
+    #   [image]
+    #   <h3> Street - Unit X </h3>   (optional, some properties only have an <h2>)
+    #   status
+    #   $price/installment (optional)
+    #   X bedrooms / Studio
+    #   Y bathrooms
+    #   Maximum N residents
+    #   Included Utilities: ...
+    #   Pet friendly / No pets
+    #   "More details" link
+    #
+    # We'll treat each <h3> or <h2> with following details as one Listing.
+
+    # Consider both h2 and h3 as "start of listing blocks"
+    for header in soup.select("h2, h3"):
+        header_text = header.get_text(" ", strip=True)
+        if not header_text:
             continue
 
-        # We walk siblings until the next h2 (next property)
-        sib = h2.next_sibling
+        # Skip global heading like "Pricing and availability..."
+        if "Pricing and availability" in header_text:
+            continue
 
-        current_unit_name: Optional[str] = None
-        current_fields: dict = {}
+        # Determine street/address: use the closest previous h2 as the street,
+        # otherwise header itself if it's an h2-only property.
+        if header.name == "h2":
+            street_text = header_text
+        else:
+            prev_h2 = header.find_previous("h2")
+            street_text = prev_h2.get_text(" ", strip=True) if prev_h2 else header_text
 
-        def flush_current():
-            """Push the current unit into the listings list."""
-            nonlocal current_unit_name, current_fields
-            if not current_unit_name and not current_fields:
-                return
-            listings.append(
-                Listing(
-                    street=addr,
-                    unit=current_unit_name,
-                    status=current_fields.get("status", ""),
-                    price=current_fields.get("price"),
-                    bedrooms=current_fields.get("bedrooms"),
-                    bathrooms=current_fields.get("bathrooms"),
-                    max_residents=current_fields.get("max_residents"),
-                    utilities=current_fields.get("utilities"),
-                    pet_friendly=current_fields.get("pet_friendly"),
-                    link=current_fields.get("link", ""),
-                )
-            )
-            current_unit_name = None
-            current_fields = {}
+        address = street_text  # keep full string, e.g. "6522 Del Playa Drive, Isla Vista, CA"
 
-        while sib and not (isinstance(sib, Tag) and sib.name == "h2"):
-            if isinstance(sib, Tag):
-                # New unit header
-                if sib.name == "h3":
-                    flush_current()
-                    current_unit_name = sib.get_text(strip=True)
+        title = header_text
 
-                # Details lines (usually <p>, sometimes <div>/etc)
-                elif sib.name in {"p", "div", "span", "li"}:
-                    text = sib.get_text(strip=True)
-                    lower = text.lower()
-                    if not text:
-                        pass
-                    elif text.startswith("$"):
-                        current_fields["price"] = text
-                    elif ("available for" in lower
-                          or "currently leased" in lower
-                          or "processing applications" in lower):
-                        current_fields["status"] = text
-                    elif "bedroom" in lower or "studio" in lower:
-                        current_fields["bedrooms"] = text
-                    elif "bathroom" in lower:
-                        current_fields["bathrooms"] = text
-                    elif "maximum" in lower and "resident" in lower:
-                        m = re.search(r"(\d+)", text)
-                        if m:
-                            current_fields["max_residents"] = int(m.group(1))
-                    elif lower.startswith("included utilities"):
-                        current_fields["utilities"] = text
-                    elif "pet friendly" in lower:
-                        current_fields["pet_friendly"] = True
-                    elif "no pets" in lower:
-                        current_fields["pet_friendly"] = False
+        # Try to grab link from the header or from a "More details" link
+        link = ""
+        a = header.find("a")
+        if a and a.get("href"):
+            link = a["href"]
 
-                # "More details" / "Apply" links
-                if sib.name == "a":
-                    href = sib.get("href") or ""
-                    if href and not href.startswith("http"):
-                        href = BASE_URL + href
-                    if href:
-                        current_fields.setdefault("link", href)
+        status = ""
+        price_raw = ""
+        beds_raw = ""
+        baths_raw = ""
+        max_res_raw = ""
+        utilities_raw = ""
+        pets_raw = ""
 
-            sib = sib.next_sibling
+        # Walk through siblings until the next header (h2 or h3)
+        for sib in header.find_next_siblings():
+            if sib.name in ("h2", "h3"):
+                break
 
-        # Flush the last unit (or single-unit property without <h3>)
-        flush_current()
+            text = sib.get_text(" ", strip=True)
+            if not text:
+                continue
+
+            lower = text.lower()
+
+            if "bedroom" in lower or "studio" in lower:
+                beds_raw = text
+            elif "bathroom" in lower:
+                baths_raw = text
+            elif "maximum" in lower and "resident" in lower:
+                max_res_raw = text
+            elif "$" in text or "installment" in lower:
+                price_raw = text
+            elif text.startswith("Included Utilities"):
+                utilities_raw = text
+            elif "pet friendly" in lower or "no pets" in lower:
+                pets_raw = text
+            elif "more details" in lower:
+                a2 = sib.find("a")
+                if a2 and a2.get("href"):
+                    link = a2["href"]
+            else:
+                # First unclassified line is usually the status (available / leased / processing)
+                if not status:
+                    status = text
+
+        # If we didn't pick up any beds/baths, this probably isn't a real listing
+        if not beds_raw and not baths_raw and not status:
+            continue
+
+        # Normalize link to absolute
+        if link and not link.startswith("http"):
+            link = base_url.rstrip("/") + "/" + link.lstrip("/")
+
+        listing = Listing(
+            title=title,
+            address=address,
+            price=price_raw,
+            beds=beds_raw,
+            baths=baths_raw,
+            link=link,
+            status=status,
+            max_residents=_to_int(max_res_raw),
+            pets=pets_raw,
+            utilities=utilities_raw,
+        )
+        listings.append(listing)
 
     return listings
