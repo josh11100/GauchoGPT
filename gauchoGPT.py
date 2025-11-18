@@ -81,7 +81,7 @@ HIDE_STREAMLIT_STYLE = """
         opacity: 0.9;
     }
 
-    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    /* ------- Second bar: GOLD navigation tabs (kept if you ever want horizontal nav) ------- */
     .gold-nav-wrapper {
         width: 100%;
         background: #FDB515; /* UCSB gold */
@@ -90,7 +90,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-bottom: 12px;
     }
 
-    /* This targets the horizontal radio group we use for main nav */
+    /* This targets a horizontal radio group if used anywhere */
     [data-testid="stHorizontalBlock"] [role="radiogroup"] {
         gap: 0;
     }
@@ -193,6 +193,41 @@ HIDE_STREAMLIT_STYLE = """
     [data-testid="stExpander"] > summary:hover {
         color: #003660;
     }
+
+    /* ------- Sidebar nav menu: remove dots, make word-click menu ------- */
+    [data-testid="stSidebar"] [data-testid="stRadio"] > label {
+        display: none; /* hide the "Main navigation" label text */
+    }
+    [data-testid="stSidebar"] [role="radiogroup"] {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    [data-testid="stSidebar"] [role="radio"] {
+        border-radius: 9999px;
+        padding: 6px 12px;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    /* hide the actual radio circle */
+    [data-testid="stSidebar"] [role="radio"] > div:first-child {
+        display: none;
+    }
+    [data-testid="stSidebar"] [role="radio"] p {
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin-bottom: 0;
+    }
+    [data-testid="stSidebar"] [role="radio"]:hover {
+        background: #e5e7eb;
+    }
+    [data-testid="stSidebar"] [role="radio"][aria-checked="true"] {
+        background: #003660;
+    }
+    [data-testid="stSidebar"] [role="radio"][aria-checked="true"] p {
+        color: #ffffff !important;
+        font-weight: 600;
+    }
 </style>
 """
 
@@ -208,10 +243,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-# Sidebar info (not main nav anymore)
-st.sidebar.title("gauchoGPT")
-st.sidebar.caption("UCSB helpers — housing • classes • professors • aid • jobs")
 
 # ---------------------------
 # Utilities
@@ -412,8 +443,8 @@ MAJOR_SHEETS = {
     "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
     "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",   
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
-    
 }
+
 def academics_page():
     st.header("🎓 Academics — advising quick links")
     st.caption("Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links.")
@@ -461,7 +492,7 @@ def academics_page():
 
     with col2:
         st.subheader("Build your quarter (scratchpad)")
-        data = st.data_editor(  # 👈 use st.data_editor instead of experimental_*
+        data = st.data_editor(
             pd.DataFrame(
                 [
                     {"Course": "PSTAT 120A", "Units": 4, "Type": "Major"},
@@ -531,9 +562,9 @@ def profs_page():
     st.subheader("What to look for")
     st.markdown(
         """
-        - Syllabi from prior quarters (grading, workload, curve)
-        - RMP comments: look for **recent** terms and specific anecdotes
-        - Department Discord/Slack/Reddit for up-to-date tips
+        - Syllabi from prior quarters (grading, workload, curve)  
+        - RMP comments: look for **recent** terms and specific anecdotes  
+        - Department Discord/Slack/Reddit for up-to-date tips  
         - Talk to students who recently took the course
         """
     )
@@ -568,10 +599,10 @@ def aid_jobs_page():
     with st.expander("How to get a job quickly"):
         st.markdown(
             """
-            1) Set up your **Handshake** profile, upload resume.
-            2) Filter by *On-campus* or *Work-study eligible*.
-            3) Apply to 5–10 postings and follow up.
-            4) Visit department offices; ask about openings.
+            1) Set up your **Handshake** profile, upload resume.  
+            2) Filter by *On-campus* or *Work-study eligible*.  
+            3) Apply to 5–10 postings and follow up.  
+            4) Visit department offices; ask about openings.  
             5) Consider research assistant roles if you have relevant skills.
             """
         )
@@ -592,21 +623,21 @@ def qa_page():
         st.info("Connect to an API (e.g., OpenAI, Anthropic) or a local model here.")
         st.code(
             """
-            import os
-            # Example sketch (pseudocode):
-            # from openai import OpenAI
-            # client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            # resp = client.chat.completions.create(
-            #     model="gpt-4o-mini",
-            #     messages=[{"role": "user", "content": prompt}],
-            # )
-            # st.write(resp.choices[0].message.content)
+import os
+# Example sketch (pseudocode):
+# from openai import OpenAI
+# client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+# resp = client.chat.completions.create(
+#     model="gpt-4o-mini",
+#     messages=[{"role": "user", "content": prompt}],
+# )
+# st.write(resp.choices[0].message.content)
             """,
             language="python",
         )
 
 # ---------------------------
-# GOLD-style main navigation (horizontal, like GOLD tabs)
+# PAGE REGISTRY
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
@@ -617,27 +648,39 @@ PAGES: Dict[str, Any] = {
     "Q&A (WIP)": qa_page,
 }
 
-st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
-choice = st.radio(
-    "Main navigation",  # visually styled as tabs by CSS above
-    list(PAGES.keys()),
-    horizontal=True,
-    index=0,
-    key="main_nav",
-)
-st.markdown('</div>', unsafe_allow_html=True)
+# ---------------------------
+# SIDEBAR NAV (words, not dots)
+# ---------------------------
+with st.sidebar:
+    st.title("gauchoGPT")
+    st.caption("UCSB helpers — housing • classes • professors • aid • jobs")
 
-# Render the selected page
-PAGES[choice]()
+    st.markdown("### Main sections")
 
-# Sidebar helper text (like GOLD help/info column)
-st.sidebar.divider()
-st.sidebar.markdown(
-    """
+    if "current_page" not in st.session_state:
+        st.session_state["current_page"] = "Housing (IV)"
+
+    choice = st.radio(
+        "Main navigation",
+        list(PAGES.keys()),
+        index=list(PAGES.keys()).index(st.session_state["current_page"]),
+        label_visibility="collapsed",
+        key="main_nav_sidebar",
+    )
+    st.session_state["current_page"] = choice
+
+    st.divider()
+    st.markdown(
+        """
 **Next steps**
-- Swap placeholder links with official UCSB URLs you trust.
-- Expand the ivproperties parser for site-specific selectors.
-- Add caching and rate limiting if you fetch often.
+- Swap placeholder links with official UCSB URLs you trust.  
+- Expand the ivproperties parser for site-specific selectors.  
+- Add caching and rate limiting if you fetch often.  
 - Connect an LLM for the Q&A tab.
 """
-)
+    )
+
+# ---------------------------
+# RENDER SELECTED PAGE
+# ---------------------------
+PAGES[st.session_state["current_page"]]()
