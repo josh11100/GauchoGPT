@@ -1,7 +1,6 @@
 # housingproperties.py
-# Helpers for scraping & cleaning Isla Vista listings from ivproperties.com
-
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import List, Optional
 import re
@@ -11,142 +10,124 @@ from bs4 import BeautifulSoup
 
 @dataclass
 class Listing:
+    """Structured representation of one housing listing."""
     title: str
     address: str
     price: str
     beds: str
     baths: str
     link: str
-    status: str = ""
     max_residents: Optional[int] = None
-    pets: str = ""
-    utilities: str = ""
+    status: str = ""
 
 
-def _to_int(text: str) -> Optional[int]:
-    if not text:
-        return None
-    m = re.search(r"(\d+)", text.replace(",", ""))
-    return int(m.group(1)) if m else None
+def _first_text_matching(chunks, *needles) -> Optional[str]:
+    """Return first text chunk that contains any of the needles."""
+    for txt in chunks:
+        lower = txt.lower()
+        if any(n in lower for n in needles):
+            return txt
+    return None
 
 
-def parse_isla_vista_properties(
-    html: str,
-    base_url: str = "https://www.ivproperties.com",
-) -> List[Listing]:
+def _extract_max_residents(chunks) -> Optional[int]:
+    # Look for "Maximum 6 residents" style text
+    for txt in chunks:
+        if "resident" in txt.lower():
+            m = re.search(r"(\d+)", txt)
+            if m:
+                return int(m.group(1))
+    return None
+
+
+def _extract_status(chunks) -> str:
+    # Look for availability-style lines
+    for txt in chunks:
+        lower = txt.lower()
+        if ("available" in lower
+                or "leased through" in lower
+                or "processing applications" in lower):
+            return txt
+    return ""
+
+
+def parse_isla_vista_properties(html: str) -> List[Listing]:
     """
     Parse the Isla Vista properties page into a list of Listing objects.
 
-    This is tailored to:
-    https://www.ivproperties.com/properties/isla-vista-properties/
+    This is written to be fairly robust: it looks for any elements whose
+    CSS class contains 'property' and then uses regex + text heuristics
+    to pull out price, beds, baths, etc.
     """
-
     soup = BeautifulSoup(html, "html.parser")
-    listings: List[Listing] = []
 
-    # The structure of the page is:
-    #   <h2> Street, Isla Vista, CA </h2>
-    #   [image]
-    #   <h3> Street - Unit X </h3>   (optional, some properties only have an <h2>)
-    #   status
-    #   $price/installment (optional)
-    #   X bedrooms / Studio
-    #   Y bathrooms
-    #   Maximum N residents
-    #   Included Utilities: ...
-    #   Pet friendly / No pets
-    #   "More details" link
-    #
-    # We'll treat each <h3> or <h2> with following details as one Listing.
+    def is_property_card(tag):
+        if tag.name not in ("div", "article", "li", "section"):
+            return False
+        classes = tag.get("class") or []
+        return any("property" in c.lower() for c in classes)
 
-    # Consider both h2 and h3 as "start of listing blocks"
-    for header in soup.select("h2, h3"):
-        header_text = header.get_text(" ", strip=True)
-        if not header_text:
-            continue
+    cards = soup.find_all(is_property_card)
 
-        # Skip global heading like "Pricing and availability..."
-        if "Pricing and availability" in header_text:
-            continue
-
-        # Determine street/address: use the closest previous h2 as the street,
-        # otherwise header itself if it's an h2-only property.
-        if header.name == "h2":
-            street_text = header_text
-        else:
-            prev_h2 = header.find_previous("h2")
-            street_text = prev_h2.get_text(" ", strip=True) if prev_h2 else header_text
-
-        address = street_text  # keep full string, e.g. "6522 Del Playa Drive, Isla Vista, CA"
-
-        title = header_text
-
-        # Try to grab link from the header or from a "More details" link
-        link = ""
-        a = header.find("a")
-        if a and a.get("href"):
-            link = a["href"]
-
-        status = ""
-        price_raw = ""
-        beds_raw = ""
-        baths_raw = ""
-        max_res_raw = ""
-        utilities_raw = ""
-        pets_raw = ""
-
-        # Walk through siblings until the next header (h2 or h3)
-        for sib in header.find_next_siblings():
-            if sib.name in ("h2", "h3"):
+    # Fallback: if nothing matched, try some generic selectors
+    if not cards:
+        selectors = [
+            "div.listing",
+            "article.property-card",
+            "div.property-card",
+            "li.property",
+        ]
+        for sel in selectors:
+            nodes = soup.select(sel)
+            if nodes:
+                cards = nodes
                 break
 
-            text = sib.get_text(" ", strip=True)
-            if not text:
-                continue
+    listings: List[Listing] = []
 
-            lower = text.lower()
+    for node in cards:
+        # text chunks inside the card
+        chunks = [t.strip() for t in node.stripped_strings if t.strip()]
 
-            if "bedroom" in lower or "studio" in lower:
-                beds_raw = text
-            elif "bathroom" in lower:
-                baths_raw = text
-            elif "maximum" in lower and "resident" in lower:
-                max_res_raw = text
-            elif "$" in text or "installment" in lower:
-                price_raw = text
-            elif text.startswith("Included Utilities"):
-                utilities_raw = text
-            elif "pet friendly" in lower or "no pets" in lower:
-                pets_raw = text
-            elif "more details" in lower:
-                a2 = sib.find("a")
-                if a2 and a2.get("href"):
-                    link = a2["href"]
-            else:
-                # First unclassified line is usually the status (available / leased / processing)
-                if not status:
-                    status = text
-
-        # If we didn't pick up any beds/baths, this probably isn't a real listing
-        if not beds_raw and not baths_raw and not status:
+        if not chunks:
             continue
 
-        # Normalize link to absolute
-        if link and not link.startswith("http"):
-            link = base_url.rstrip("/") + "/" + link.lstrip("/")
+        # Title / address: usually in an h2/h3, else first chunk
+        title_tag = node.find(["h2", "h3", "h4"])
+        title = title_tag.get_text(strip=True) if title_tag else chunks[0]
 
-        listing = Listing(
-            title=title,
-            address=address,
-            price=price_raw,
-            beds=beds_raw,
-            baths=baths_raw,
-            link=link,
-            status=status,
-            max_residents=_to_int(max_res_raw),
-            pets=pets_raw,
-            utilities=utilities_raw,
+        # Try to separate address from title if possible
+        address = title
+        if "," in title:
+            # e.g. "6522 Del Playa Drive, Unit A"
+            address = title
+
+        # Price: first chunk with a $
+        price = _first_text_matching(chunks, "$") or ""
+
+        # Beds / baths
+        beds = _first_text_matching(chunks, "bed", "bedroom") or ""
+        baths = _first_text_matching(chunks, "bath", "bathroom") or ""
+
+        # Max residents & status
+        max_residents = _extract_max_residents(chunks)
+        status = _extract_status(chunks)
+
+        # Link (if there's an <a> inside)
+        link_tag = node.find("a", href=True)
+        link = link_tag["href"] if link_tag else ""
+
+        listings.append(
+            Listing(
+                title=title,
+                address=address,
+                price=price,
+                beds=beds,
+                baths=baths,
+                link=link,
+                max_residents=max_residents,
+                status=status,
+            )
         )
-        listings.append(listing)
 
     return listings
