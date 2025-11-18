@@ -1,8 +1,7 @@
-# gauchoGPT.py
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
 # A single-file Streamlit web app to help UCSB students with:
-# - Housing in Isla Vista (scraper for ivproperties.com with polite headers)
+# - Housing in Isla Vista (Isla Vista Properties 2026-27 page)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
 # - Class/location helper with campus map pins
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
@@ -10,12 +9,18 @@
 # ------------------------------------------------------------
 
 from __future__ import annotations
+import os
 import re
+import time
+import math
+import json
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 
 try:
@@ -25,15 +30,13 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-from housingproperties import Listing, parse_isla_vista_properties
-
 # ---------------------------
 # Page config
 # ---------------------------
 st.set_page_config(
     page_title="gauchoGPT — UCSB helper",
     page_icon="🧢",
-    layout="wide",
+    layout="wide"
 )
 
 # ---------------------------
@@ -78,47 +81,67 @@ HIDE_STREAMLIT_STYLE = """
         opacity: 0.9;
     }
 
-    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    /* ------- Second bar: GOLD navigation tabs ------- */
     .gold-nav-wrapper {
         width: 100%;
         background: #FDB515; /* UCSB gold */
-        padding: 4px 24px 0 24px;
+        padding: 0 24px;
         box-shadow: 0 1px 2px rgba(15,23,42,0.15);
         margin-bottom: 12px;
     }
 
-    /* This targets the horizontal radio group we use for main nav */
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] {
+    /* Hide the "Main navigation" label text */
+    .gold-nav-wrapper [data-testid="stRadio"] > label {
+        display: none;
+    }
+
+    /* Layout the horizontal radio like a tab row */
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] {
+        padding-top: 4px;
+        padding-bottom: 0;
+    }
+
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] [role="radiogroup"] {
         gap: 0;
+        display: flex;
     }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
-        cursor: pointer;
-        padding: 10px 24px;
-        border-radius: 0;
-        border: none;
-        background: transparent;
-        color: #374151; /* slate */
-        margin-right: 16px;
-    }
-    /* hide the actual radio circle in the top nav */
-    [data-testid="stHorizontalBlock"] [role="radio"] > div:first-child {
+
+    /* Hide the default radio input dots */
+    .gold-nav-wrapper input[type="radio"] {
         display: none !important;
     }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
-        background: transparent;
-        border-bottom: 3px solid #ffffff;
+
+    /* Base tab style */
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] [role="radio"] {
+        border-radius: 0;
+        border: none;
+        background: #FDE68A; /* light gold */
+        padding: 10px 22px;
+        margin: 0;
         box-shadow: none;
+        cursor: pointer;
     }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
-        color: #003660;
-        font-weight: 700;
-    }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
-        font-size: 0.9rem;
+
+    /* Label text inside tabs */
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] [role="radio"] p {
+        font-size: 0.86rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 0;
+        letter-spacing: 0.03em;
+        color: #374151;
+        margin: 0;
+    }
+
+    /* Active tab (aria-checked=true) */
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
+        background: #ffffff;
+        box-shadow: 0 -2px 0 0 #ffffff;
+        border-top: 2px solid #003660;
+        border-left: 1px solid rgba(15,23,42,0.18);
+        border-right: 1px solid rgba(15,23,42,0.18);
+    }
+    .gold-nav-wrapper [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
+        color: #003660;
     }
 
     /* ------- Sidebar: light column like GOLD left section ------- */
@@ -137,7 +160,7 @@ HIDE_STREAMLIT_STYLE = """
         color: #111827 !important;
     }
 
-    /* ------- Buttons in GOLD/NAVY (general buttons, NOT top nav) ------- */
+    /* ------- Buttons in GOLD/NAVY ------- */
     .stButton > button, .st-link-button {
         border-radius: 9999px;
         border-width: 0;
@@ -179,7 +202,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-right:6px
     }
     .code {
-        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         background:#0b1021;
         color:#d1e1ff;
         padding:3px 6px;
@@ -211,7 +234,7 @@ st.markdown(
 
 # Sidebar info (not main nav anymore)
 st.sidebar.title("gauchoGPT")
-st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
+st.sidebar.caption("UCSB helpers — housing • classes • professors • aid • jobs")
 
 # ---------------------------
 # Utilities
@@ -234,11 +257,200 @@ def fetch(url: str, *, timeout: int = 15) -> Optional[requests.Response]:
         return None
 
 # ---------------------------
-# HOUSING (ivproperties.com)
+# HOUSING (Isla Vista Properties 2026–27)
 # ---------------------------
+
+@dataclass
+class Listing:
+    title: str
+    address: str
+    price: str
+    beds: str
+    baths: str
+    max_residents: str
+    status: str
+    utilities: str
+    pet_friendly: Optional[bool]
+    link: str
+
+IVP_ISLA_VISTA_URL = "https://www.ivproperties.com/properties/isla-vista-properties/"
+
+BEDROOM_RE = re.compile(r"(\d+(?:\.\d+)?)\s+bedroom", re.IGNORECASE)
+BATHROOM_RE = re.compile(r"(\d+(?:\.\d+)?)\s+bathroom", re.IGNORECASE)
+MAX_RES_RE = re.compile(r"(?:Maximum\s+|)(\d+)\s+residents?", re.IGNORECASE)
+PRICE_RE = re.compile(r"\$([\d,]+)")
+
+def _parse_listing_from_block(
+    street: str,
+    unit_title: str,
+    block_text: List[str],
+    link: str
+) -> Listing:
+    """Given the street, unit title, and list of text lines, build a Listing."""
+    # Clean lines
+    lines = [ln.strip() for ln in block_text if ln.strip()]
+    full_text = " ".join(lines)
+
+    status = ""
+    price = ""
+    beds = ""
+    baths = ""
+    max_residents = ""
+    utilities = ""
+    pet_friendly: Optional[bool] = None
+
+    # Status: usually first non-empty line
+    if lines:
+        for ln in lines:
+            if any(
+                key in ln.lower()
+                for key in ["available", "processing applications", "leased", "currently leased"]
+            ):
+                status = ln
+                break
+
+    # Price line
+    for ln in lines:
+        if "$" in ln:
+            price = ln
+            break
+
+    # Beds / baths / max residents / utilities
+    for ln in lines:
+        if "bedroom" in ln.lower() or "studio" in ln.lower():
+            beds = ln
+        if "bathroom" in ln.lower():
+            baths = ln
+        if "resident" in ln.lower():
+            max_residents = ln
+        if "Included Utilities" in ln:
+            utilities = ln
+
+    # Pet friendly / No pets
+    if "pet friendly" in full_text.lower():
+        pet_friendly = True
+    elif "no pets" in full_text.lower():
+        pet_friendly = False
+
+    return Listing(
+        title=unit_title,
+        address=street,
+        price=price,
+        beds=beds,
+        baths=baths,
+        max_residents=max_residents,
+        status=status,
+        utilities=utilities,
+        pet_friendly=pet_friendly,
+        link=link,
+    )
+
+
+def parse_isla_vista_properties(html: str) -> List[Listing]:
+    """
+    Parser tailored to https://www.ivproperties.com/properties/isla-vista-properties/
+    It walks h2 (street) and h3 (unit) headings and collects the text lines between them.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    listings: List[Listing] = []
+
+    # All h2s that look like street addresses for Isla Vista housing
+    for h2 in soup.find_all(["h2"]):
+        street = h2.get_text(strip=True)
+        if "Isla Vista" not in street and "Pasado Road" not in street and "Sueno Road" not in street:
+            # quick guard — avoids header / filter sections
+            continue
+
+        # Walk forward until the next h2
+        node = h2.next_sibling
+        current_unit_title: Optional[str] = None
+        current_block: List[str] = []
+        current_link: str = ""
+        saw_any_unit = False
+
+        def flush():
+            nonlocal current_unit_title, current_block, current_link, saw_any_unit
+            if current_unit_title and current_block:
+                listings.append(
+                    _parse_listing_from_block(
+                        street=street,
+                        unit_title=current_unit_title,
+                        block_text=current_block,
+                        link=current_link,
+                    )
+                )
+            current_unit_title = None
+            current_block = []
+            current_link = ""
+
+        while node is not None:
+            if getattr(node, "name", None) == "h2":
+                # next property
+                break
+
+            if getattr(node, "name", None) == "h3":
+                # starting a new unit
+                # flush previous
+                flush()
+                saw_any_unit = True
+                unit_title = node.get_text(strip=True)
+                current_unit_title = unit_title
+
+                # link is usually on the <a> inside the h3
+                link_tag = node.find("a")
+                if link_tag and link_tag.get("href"):
+                    href = link_tag.get("href")
+                    if href.startswith("http"):
+                        current_link = href
+                    else:
+                        current_link = "https://www.ivproperties.com" + href
+                else:
+                    current_link = IVP_ISLA_VISTA_URL
+
+            else:
+                # normal content between headings
+                if getattr(node, "name", None) in ("p", "li"):
+                    text = node.get_text(" ", strip=True)
+                    if text:
+                        current_block.append(text)
+
+            node = node.next_sibling
+
+        # Flush last unit for this street
+        flush()
+
+        # Some properties (like single-house entries) might not have h3 units,
+        # but only text under the h2. Handle that as one big "unit".
+        if not saw_any_unit:
+            # Collect text between h2 and next h2
+            block: List[str] = []
+            node2 = h2.next_sibling
+            while node2 is not None and getattr(node2, "name", None) != "h2":
+                if getattr(node2, "name", None) in ("p", "li"):
+                    t = node2.get_text(" ", strip=True)
+                    if t:
+                        block.append(t)
+                node2 = node2.next_sibling
+
+            if block:
+                listings.append(
+                    _parse_listing_from_block(
+                        street=street,
+                        unit_title=street,
+                        block_text=block,
+                        link=IVP_ISLA_VISTA_URL,
+                    )
+                )
+
+    return listings
+
+
 def housing_page():
     st.header("🏠 Isla Vista Housing (beta)")
-    st.caption("Data pulled live from public pages when possible. Always verify details with the property manager.")
+    st.caption(
+        "Data pulled from IV Properties' Isla Vista page for the 2026–27 term. "
+        "Always verify details with the property manager."
+    )
 
     col_a, col_b, col_c, col_d, col_e = st.columns([2, 1, 1, 1, 1])
     with col_a:
@@ -263,19 +475,19 @@ def housing_page():
 
     if fetch_btn:
         with st.spinner("Contacting ivproperties.com…"):
-            url = "https://www.ivproperties.com/properties/isla-vista-properties/"
+            url = IVP_ISLA_VISTA_URL
             resp = fetch(url)
             if not resp:
                 return
 
-            listings: List[Listing] = parse_isla_vista_properties(resp.text)
+            listings = parse_isla_vista_properties(resp.text)
 
             def price_to_int(p: str) -> Optional[int]:
-                m = re.search(r"(\$?)([\d,]+)", p)
+                m = PRICE_RE.search(p)
                 if not m:
                     return None
                 try:
-                    return int(m.group(2).replace(",", ""))
+                    return int(m.group(1).replace(",", ""))
                 except Exception:
                     return None
 
@@ -283,57 +495,66 @@ def housing_page():
             for L in listings:
                 p_int = price_to_int(L.price)
 
-                # Filters
+                # Max price filter
                 if max_price and (p_int is not None) and p_int > max_price:
                     continue
 
+                # Bedrooms filter
                 if beds != "Any":
-                    if beds == "4+":
-                        b = re.search(r"(\d+)", L.beds or "")
-                        if not (b and int(b.group(1)) >= 4):
+                    text = (L.beds or "").lower()
+                    if beds == "Studio":
+                        if "studio" not in text:
+                            continue
+                    elif beds == "4+":
+                        m = BEDROOM_RE.search(text)
+                        if not (m and float(m.group(1)) >= 4):
                             continue
                     else:
-                        if beds.lower() not in (L.beds or "").lower():
+                        # "1", "2", "3" etc.
+                        m = BEDROOM_RE.search(text)
+                        if not (m and m.group(1) == beds):
                             continue
 
-                row = {
-                    "Title": L.title,
-                    "Address": L.address,
-                    "Price": L.price,
-                    "Beds": L.beds,
-                    "Baths": L.baths,
-                    "Max residents": L.max_residents,
-                    "Status": L.status,
-                    "Link": L.link
-                    if L.link.startswith("http")
-                    else ("https://www.ivproperties.com" + L.link if L.link else ""),
-                }
-                rows.append(row)
+                # Sublease filter (site rarely uses this word but keep as placeholder)
+                if sublease:
+                    if "sublease" not in L.status.lower() and "sublease" not in (L.title.lower() + L.address.lower()):
+                        continue
 
-            # Keyword filter last (title/address/beds/baths/status)
+                rows.append(
+                    {
+                        "Title": L.title,
+                        "Address": L.address,
+                        "Price": L.price,
+                        "Beds": L.beds,
+                        "Baths": L.baths,
+                        "Max Residents": L.max_residents,
+                        "Status": L.status,
+                        "Utilities": L.utilities,
+                        "Pets": (
+                            "Pet friendly" if L.pet_friendly is True
+                            else "No pets" if L.pet_friendly is False
+                            else ""
+                        ),
+                        "Link": L.link,
+                    }
+                )
+
+            # Simple keyword search across a few text fields
             if q:
                 q_lower = q.lower()
                 rows = [
-                    r
-                    for r in rows
-                    if q_lower in (r["Title"] or "").lower()
-                    or q_lower in (r["Address"] or "").lower()
-                    or q_lower in (r["Beds"] or "").lower()
-                    or q_lower in (r["Baths"] or "").lower()
-                    or q_lower in (str(r["Status"]) or "").lower()
-                ]
-
-            if sublease:
-                rows = [
-                    r
-                    for r in rows
-                    if "sublease" in (r["Title"] or "").lower()
-                    or "sublease" in (r["Address"] or "").lower()
-                    or "sublease" in (r["Status"] or "").lower()
+                    r for r in rows
+                    if q_lower in r["Title"].lower()
+                    or q_lower in r["Address"].lower()
+                    or q_lower in r["Beds"].lower()
+                    or q_lower in r["Status"].lower()
                 ]
 
             if not rows:
-                st.info("No matching results found, or the site layout changed. Try clearing filters or checking the site directly.")
+                st.info(
+                    "No matching results found with the current filters, or the site layout changed. "
+                    "Try clearing filters or check the site directly."
+                )
                 return
 
             df = pd.DataFrame(rows)
@@ -341,10 +562,13 @@ def housing_page():
 
             for r in rows:
                 st.markdown(
-                    f"- [{r['Title']}]({r['Link']}) — {r['Price']} · {r['Beds']} · {r['Baths']} · {r['Address']}"
+                    f"- [{r['Title']}]({r['Link']}) — {r['Price'] or 'Price N/A'} · "
+                    f"{r['Beds']} · {r['Baths']} · {r['Address']} · {r['Status']}"
                 )
 
-            st.success("Fetched listings. Always cross-check availability with the property manager.")
+            st.success(
+                "Fetched Isla Vista 2026–27 listings. Always cross-check availability with the property manager."
+            )
 
     with st.expander("⚖️ Legal & ethics (read me)"):
         st.write(
@@ -383,6 +607,7 @@ def academics_page():
 
         st.subheader("Most asked questions")
 
+        # Q&A as interactive expanders
         with st.expander("Still lost on what classes to take?"):
             st.markdown(
                 """
@@ -524,10 +749,10 @@ def aid_jobs_page():
     with st.expander("How to get a job quickly"):
         st.markdown(
             """
-            1) Set up your **Handshake** profile, upload resume.
-            2) Filter by *On-campus* or *Work-study eligible*.
-            3) Apply to 5–10 postings and follow up.
-            4) Visit department offices; ask about openings.
+            1) Set up your **Handshake** profile, upload resume.  
+            2) Filter by *On-campus* or *Work-study eligible*.  
+            3) Apply to 5–10 postings and follow up.  
+            4) Visit department offices; ask about openings.  
             5) Consider research assistant roles if you have relevant skills.
             """
         )
@@ -575,23 +800,24 @@ PAGES: Dict[str, Any] = {
 
 st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
 choice = st.radio(
-    "Main navigation",
+    "Main navigation",  # visually styled as tabs by CSS above
     list(PAGES.keys()),
     horizontal=True,
     index=0,
     key="main_nav",
-    label_visibility="collapsed",
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
+# Render the selected page
 PAGES[choice]()
 
+# Sidebar helper text (like GOLD help/info column)
 st.sidebar.divider()
 st.sidebar.markdown(
     """
 **Next steps**
 - Swap placeholder links with official UCSB URLs you trust.
-- Expand the ivproperties parser for site-specific selectors.
+- Expand the Isla Vista parser as the site changes or you want more features (price per person, etc.).
 - Connect an LLM for the Q&A tab.
 """
 )
