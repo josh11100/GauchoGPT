@@ -85,7 +85,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-bottom: 12px;
     }
 
-    /* This targets the the horizontal radio group we use for main nav */
+    /* This targets the horizontal radio group we use for main nav */
     [data-testid="stHorizontalBlock"] [role="radiogroup"] {
         gap: 0;
     }
@@ -214,12 +214,12 @@ st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · 
 # ---------------------------
 # HOUSING — CSV-backed listings
 # ---------------------------
-HOUSING_CSV = "iv_housing_listings.csv"  # <- make sure this file exists in the same folder
+HOUSING_CSV = "iv_housing_listings.csv"  # make sure this file exists in the same folder
 
 # ---------------------------
 # ACADEMICS — classes by quarter (CSV)
 # ---------------------------
-COURSES_CSV = "major_courses_by_quarter.csv"  # <- CSV for classes by major & quarter
+COURSES_CSV = "major_courses_by_quarter.csv"  # CSV for classes by major & quarter
 
 
 def load_housing_df() -> Optional[pd.DataFrame]:
@@ -241,10 +241,8 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     # Optional / new columns
     if "status" not in df.columns:
-        # default: treat everything as available if status not given
         df["status"] = "available"
     if "is_studio" not in df.columns:
-        # infer from bedrooms==0 if present, else default False
         df["is_studio"] = df.get("bedrooms", 0).fillna(0).astype(float).eq(0)
 
     # Type cleaning
@@ -272,39 +270,36 @@ def load_courses_df() -> Optional[pd.DataFrame]:
     Load a CSV with class offerings by major and quarter.
 
     Expected columns (case-insensitive, but best to match exactly):
-    - major            (e.g., 'Statistics & Data Science', 'Computer Science')
-    - course_code      (e.g., 'PSTAT 120A')
-    - title            (e.g., 'Probability and Statistics')
-    - quarter          (one of: 'Fall', 'Winter', 'Spring', 'Summer')
-    - units            (optional, numeric or range as string)
-    - status           (optional, 'Open', 'Full', 'Mixed', etc.)
-    - notes            (optional, text)
+    - major
+    - course_code
+    - title
+    - quarter       (Fall/Winter/Spring/Summer)
+    Optional:
+    - units         (numeric or range as string)
+    - status        (Open / Full / Mixed / etc.)
+    - notes         (text)
     """
     if not os.path.exists(COURSES_CSV):
-        # We'll handle None gracefully in the Academics page
         return None
 
     df = pd.read_csv(COURSES_CSV)
 
-    # Normalize column names a bit
+    # Normalize column names
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Make sure minimum columns exist
     for col in ["major", "course_code", "title", "quarter"]:
         if col not in df.columns:
             st.error(f"'{COURSES_CSV}' is missing required column: '{col}'")
             return None
 
-    # Optional columns
     if "units" not in df.columns:
         df["units"] = None
-    if "notes" not in df.columns:
-        df["notes"] = ""
     if "status" not in df.columns:
         df["status"] = ""
+    if "notes" not in df.columns:
+        df["notes"] = ""
 
-    # Normalize quarter text
-    df["quarter"] = df["quarter"].astype(str).str.strip().str.title()  # e.g., 'fall' -> 'Fall'
+    df["quarter"] = df["quarter"].astype(str).str.strip().str.title()
 
     return df
 
@@ -321,7 +316,6 @@ def housing_page():
         st.warning("No housing data found in the CSV.")
         return
 
-    # ---------------- Filters ----------------
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.5, 1.5, 1.5])
 
     with col_f1:
@@ -336,7 +330,6 @@ def housing_page():
         )
 
     with col_f2:
-        # Bedrooms filter
         bedroom_choice = st.selectbox(
             "Bedrooms",
             ["Any", "Studio", "1", "2", "3", "4", "5+"],
@@ -357,13 +350,12 @@ def housing_page():
             index=0,
         )
 
-    # ---------------- Apply filters ----------------
     filtered = df.copy()
 
-    # Price filter
+    # Price
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
-    # Bedrooms / studio filter
+    # Bedrooms / studio
     if bedroom_choice == "Studio":
         filtered = filtered[filtered["is_studio"] == True]
     elif bedroom_choice == "5+":
@@ -375,7 +367,7 @@ def housing_page():
         except ValueError:
             pass
 
-    # Status filter
+    # Status
     status_choice_lower = status_choice.lower()
     if status_choice_lower.startswith("available"):
         filtered = filtered[filtered["status"] == "available"]
@@ -384,17 +376,15 @@ def housing_page():
     elif status_choice_lower.startswith("leased"):
         filtered = filtered[filtered["status"] == "leased"]
 
-    # Pet filter
+    # Pets
     if pet_choice == "Only pet-friendly":
         filtered = filtered[filtered["pet_friendly"] == True]
     elif pet_choice == "No pets allowed":
-        # assume "No pets" in pet_policy means no pets
         filtered = filtered[
             (filtered["pet_friendly"] == False)
             | (filtered["pet_policy"].fillna("").str.contains("No pets", case=False))
         ]
 
-    # ---------------- Summary / metrics ----------------
     st.markdown(
         f"""
         <div class='small muted'>
@@ -409,7 +399,6 @@ def housing_page():
         st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
         return
 
-    # Optional: small summary table
     with st.expander("📊 View table of filtered units"):
         st.dataframe(
             filtered[
@@ -431,7 +420,6 @@ def housing_page():
             use_container_width=True,
         )
 
-    # ---------------- Card-style results ----------------
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
         street = row.get("street", "")
         unit = row.get("unit", "")
@@ -448,7 +436,6 @@ def housing_page():
         is_studio = bool(row.get("is_studio", False))
         ppp = row.get("price_per_person", None)
 
-        # Human-friendly status text
         if status == "available":
             status_text = f"Available {avail_start}–{avail_end} (applications open)"
             status_badge_class = "ok"
@@ -462,13 +449,11 @@ def housing_page():
             status_text = status
             status_badge_class = "muted"
 
-        # Bedrooms label
         if is_studio:
             bed_label = "Studio"
         else:
             bed_label = f"{int(bd) if not pd.isna(bd) else '?'} bed"
 
-        # Bathrooms label
         if not pd.isna(ba):
             if float(ba).is_integer():
                 ba_label = f"{int(ba)} bath"
@@ -479,7 +464,6 @@ def housing_page():
 
         residents_label = f"Up to {int(max_res)} residents" if not pd.isna(max_res) else "Max residents: ?"
 
-        # Price text
         if not pd.isna(price):
             price_text = f"${int(price):,}/installment"
         else:
@@ -491,7 +475,6 @@ def housing_page():
         st.markdown(f"### {street}")
         st.markdown(f"**{unit}**")
 
-        # Badges row
         st.markdown(
             f"""
             <div class='small'>
@@ -504,7 +487,6 @@ def housing_page():
             unsafe_allow_html=True,
         )
 
-        # Status + pricing
         st.markdown(
             f"""
             <div class='small'>
@@ -547,18 +529,20 @@ MAJOR_SHEETS = {
 
 def academics_page():
     st.header("🎓 Academics — advising quick links")
-    st.caption("Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links.")
+    st.caption(
+        "Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links."
+    )
 
     courses_df = load_courses_df()
 
     col1, col2 = st.columns([1.2, 2])
     with col1:
-        # ---- Major planning sheet (existing) ----
+        # Major plan
         major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
 
-        # ---- Classes available by quarter ----
+        # Classes by quarter
         st.subheader("Classes available by quarter")
 
         if courses_df is None:
@@ -570,10 +554,9 @@ def academics_page():
             quarter = st.selectbox(
                 "Quarter",
                 ["Fall", "Winter", "Spring", "Summer"],
-                index=1,  # default to Winter
+                index=1,
             )
 
-            # Filter by selected major + quarter
             filtered = courses_df[
                 (courses_df["major"] == major) &
                 (courses_df["quarter"] == quarter)
@@ -803,10 +786,8 @@ choice = st.radio(
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Render the selected page
 PAGES[choice]()
 
-# Sidebar helper text (like GOLD help/info column)
 st.sidebar.divider()
 st.sidebar.markdown(
     """
