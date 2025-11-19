@@ -219,7 +219,7 @@ HOUSING_CSV = "iv_housing_listings.csv"  # <- make sure this file exists in the 
 # ---------------------------
 # ACADEMICS — classes by quarter (CSV)
 # ---------------------------
-COURSES_CSV = "major_courses_by_quarter.csv"  # <- new CSV for classes by major & quarter
+COURSES_CSV = "major_courses_by_quarter.csv"  # <- CSV for classes by major & quarter
 
 
 def load_housing_df() -> Optional[pd.DataFrame]:
@@ -276,7 +276,8 @@ def load_courses_df() -> Optional[pd.DataFrame]:
     - course_code      (e.g., 'PSTAT 120A')
     - title            (e.g., 'Probability and Statistics')
     - quarter          (one of: 'Fall', 'Winter', 'Spring', 'Summer')
-    - units            (optional, numeric)
+    - units            (optional, numeric or range as string)
+    - status           (optional, 'Open', 'Full', 'Mixed', etc.)
     - notes            (optional, text)
     """
     if not os.path.exists(COURSES_CSV):
@@ -299,6 +300,8 @@ def load_courses_df() -> Optional[pd.DataFrame]:
         df["units"] = None
     if "notes" not in df.columns:
         df["notes"] = ""
+    if "status" not in df.columns:
+        df["status"] = ""
 
     # Normalize quarter text
     df["quarter"] = df["quarter"].astype(str).str.strip().str.title()  # e.g., 'fall' -> 'Fall'
@@ -555,7 +558,7 @@ def academics_page():
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
 
-        # ---- NEW: Classes available by quarter ----
+        # ---- Classes available by quarter ----
         st.subheader("Classes available by quarter")
 
         if courses_df is None:
@@ -579,8 +582,14 @@ def academics_page():
             if filtered.empty:
                 st.info(f"No classes listed for **{major}** in **{quarter}** in your CSV yet.")
             else:
+                cols_to_show = ["course_code", "title", "units"]
+                if "status" in filtered.columns:
+                    cols_to_show.append("status")
+                if "notes" in filtered.columns:
+                    cols_to_show.append("notes")
+
                 st.dataframe(
-                    filtered[["course_code", "title", "units", "notes"]],
+                    filtered[cols_to_show],
                     use_container_width=True,
                 )
 
