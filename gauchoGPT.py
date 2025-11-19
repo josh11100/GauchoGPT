@@ -85,7 +85,7 @@ HIDE_STREAMLIT_STYLE = """
         margin-bottom: 12px;
     }
 
-    /* This targets the horizontal radio group we use for main nav */
+    /* This targets the the horizontal radio group we use for main nav */
     [data-testid="stHorizontalBlock"] [role="radiogroup"] {
         gap: 0;
     }
@@ -216,6 +216,12 @@ st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · 
 # ---------------------------
 HOUSING_CSV = "iv_housing_listings.csv"  # <- make sure this file exists in the same folder
 
+# ---------------------------
+# ACADEMICS — classes by quarter (CSV)
+# ---------------------------
+COURSES_CSV = "major_courses_by_quarter.csv"  # <- new CSV for classes by major & quarter
+
+
 def load_housing_df() -> Optional[pd.DataFrame]:
     """Load and lightly clean the housing CSV."""
     if not os.path.exists(HOUSING_CSV):
@@ -257,6 +263,45 @@ def load_housing_df() -> Optional[pd.DataFrame]:
         else None,
         axis=1,
     )
+
+    return df
+
+
+def load_courses_df() -> Optional[pd.DataFrame]:
+    """
+    Load a CSV with class offerings by major and quarter.
+
+    Expected columns (case-insensitive, but best to match exactly):
+    - major            (e.g., 'Statistics & Data Science', 'Computer Science')
+    - course_code      (e.g., 'PSTAT 120A')
+    - title            (e.g., 'Probability and Statistics')
+    - quarter          (one of: 'Fall', 'Winter', 'Spring', 'Summer')
+    - units            (optional, numeric)
+    - notes            (optional, text)
+    """
+    if not os.path.exists(COURSES_CSV):
+        # We'll handle None gracefully in the Academics page
+        return None
+
+    df = pd.read_csv(COURSES_CSV)
+
+    # Normalize column names a bit
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    # Make sure minimum columns exist
+    for col in ["major", "course_code", "title", "quarter"]:
+        if col not in df.columns:
+            st.error(f"'{COURSES_CSV}' is missing required column: '{col}'")
+            return None
+
+    # Optional columns
+    if "units" not in df.columns:
+        df["units"] = None
+    if "notes" not in df.columns:
+        df["notes"] = ""
+
+    # Normalize quarter text
+    df["quarter"] = df["quarter"].astype(str).str.strip().str.title()  # e.g., 'fall' -> 'Fall'
 
     return df
 
@@ -496,15 +541,48 @@ MAJOR_SHEETS = {
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
 }
 
+
 def academics_page():
     st.header("🎓 Academics — advising quick links")
     st.caption("Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links.")
 
+    courses_df = load_courses_df()
+
     col1, col2 = st.columns([1.2, 2])
     with col1:
+        # ---- Major planning sheet (existing) ----
         major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
+
+        # ---- NEW: Classes available by quarter ----
+        st.subheader("Classes available by quarter")
+
+        if courses_df is None:
+            st.caption(
+                "Add a CSV named `major_courses_by_quarter.csv` in this folder to show "
+                "classes by major and quarter."
+            )
+        else:
+            quarter = st.selectbox(
+                "Quarter",
+                ["Fall", "Winter", "Spring", "Summer"],
+                index=1,  # default to Winter
+            )
+
+            # Filter by selected major + quarter
+            filtered = courses_df[
+                (courses_df["major"] == major) &
+                (courses_df["quarter"] == quarter)
+            ]
+
+            if filtered.empty:
+                st.info(f"No classes listed for **{major}** in **{quarter}** in your CSV yet.")
+            else:
+                st.dataframe(
+                    filtered[["course_code", "title", "units", "notes"]],
+                    use_container_width=True,
+                )
 
         st.subheader("Most asked questions")
 
@@ -556,7 +634,11 @@ def academics_page():
         st.metric("Planned units", int(sum(data["Units"])) if not data.empty else 0)
 
     with st.expander("🔗 Add more official links"):
-        st.write("Paste your department URLs here for quick access in future iterations.")
+        st.markdown(
+            """
+            Paste your department URLs here for quick access in future iterations.
+            """
+        )
 
 # ---------------------------
 # CLASS LOCATION (map)
@@ -569,6 +651,7 @@ BUILDINGS = {
     "Library": (34.41388, -119.84627),
     "IV Theater": (34.41249, -119.86155),
 }
+
 
 def locator_page():
     st.header("🗺️ Quick class locator")
@@ -593,6 +676,7 @@ DEPT_SITES = {
     "CS": "https://www.cs.ucsb.edu/people/faculty",
     "MATH": "https://www.math.ucsb.edu/people/faculty",
 }
+
 
 def profs_page():
     st.header("👩‍🏫 Professors & course intel")
@@ -628,6 +712,7 @@ AID_LINKS = {
     "Work-Study (UCSB)": "https://www.finaid.ucsb.edu/types-of-aid/work-study",
     "Handshake": "https://ucsb.joinhandshake.com/",
 }
+
 
 def aid_jobs_page():
     st.header("💸 Financial aid, work-study & jobs")
@@ -720,6 +805,7 @@ st.sidebar.markdown(
 - Keep the housing CSV updated as availability changes.
 - Add non-available units with correct `status` (processing / leased).
 - Expand to more property managers or data sources.
+- Fill in `major_courses_by_quarter.csv` for classes by major & quarter.
 - Connect an LLM for the Q&A tab.
 """
 )
