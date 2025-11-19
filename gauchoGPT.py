@@ -526,6 +526,7 @@ MAJOR_SHEETS = {
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
 }
 
+
 def academics_page():
     st.header("🎓 Academics — advising quick links")
     st.caption(
@@ -536,51 +537,45 @@ def academics_page():
 
     col1, col2 = st.columns([1.2, 2])
     with col1:
-        # ---- Major planning sheet (top) ----
+        # Major plan
         major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
         st.link_button("Open major planning page", MAJOR_SHEETS[major])
         st.divider()
 
-        # ---- NEW: PSTAT-specific tab using your CSV ----
-        st.subheader("Classes by department")
+        # Classes by quarter
+        st.subheader("Classes available by quarter")
 
         if courses_df is None:
             st.caption(
                 "Add a CSV named `major_courses_by_quarter.csv` in this folder to show "
-                "classes by department."
+                "classes by major and quarter."
             )
         else:
-            pstat_tab, = st.tabs(["PSTAT – Statistics & Applied Probability"])
+            quarter = st.selectbox(
+                "Quarter",
+                ["Fall", "Winter", "Spring", "Summer"],
+                index=1,
+            )
 
-            with pstat_tab:
-                quarter = st.selectbox(
-                    "Quarter",
-                    ["Fall", "Winter", "Spring", "Summer"],
-                    index=1,  # default to Winter
-                    key="pstat_quarter",
+            filtered = courses_df[
+                (courses_df["major"] == major) &
+                (courses_df["quarter"] == quarter)
+            ]
+
+            if filtered.empty:
+                st.info(f"No classes listed for **{major}** in **{quarter}** in your CSV yet.")
+            else:
+                cols_to_show = ["course_code", "title", "units"]
+                if "status" in filtered.columns:
+                    cols_to_show.append("status")
+                if "notes" in filtered.columns:
+                    cols_to_show.append("notes")
+
+                st.dataframe(
+                    filtered[cols_to_show],
+                    use_container_width=True,
                 )
 
-                # Your current CSV rows for PSTAT are tagged as the Stats & DS major
-                pstat_df = courses_df[
-                    (courses_df["major"] == "Statistics & Data Science") &
-                    (courses_df["quarter"] == quarter)
-                ]
-
-                if pstat_df.empty:
-                    st.info(f"No PSTAT classes listed for **{quarter}** in your CSV yet.")
-                else:
-                    cols_to_show = ["course_code", "title", "units"]
-                    if "status" in pstat_df.columns:
-                        cols_to_show.append("status")
-                    if "notes" in pstat_df.columns:
-                        cols_to_show.append("notes")
-
-                    st.dataframe(
-                        pstat_df[cols_to_show],
-                        use_container_width=True,
-                    )
-
-        # ---- FAQ / Most-asked questions ----
         st.subheader("Most asked questions")
 
         with st.expander("Still lost on what classes to take?"):
@@ -804,4 +799,3 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
-
