@@ -3,7 +3,7 @@
 # A single-file Streamlit web app to help UCSB students with:
 # - Housing in Isla Vista (CSV-backed listings from ivproperties.com)
 # - Academic advising quick links (major sheets / prereqs — placeholders)
-# - Class/location helper with campus map pins
+# - Class/location helper with campus map pins (inside Academics tab)
 # - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
 # - Financial aid & jobs FAQs (with handy links)
 # ------------------------------------------------------------
@@ -526,11 +526,23 @@ MAJOR_SHEETS = {
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
 }
 
+# ---------------------------
+# CLASS LOCATION (map) – data used inside Academics page
+# ---------------------------
+BUILDINGS = {
+    "Phelps Hall (PHELP)": (34.41239, -119.84862),
+    "Harold Frank Hall (HFH)": (34.41434, -119.84246),
+    "Chemistry (CHEM)": (34.41165, -119.84586),
+    "HSSB": (34.41496, -119.84571),
+    "Library": (34.41388, -119.84627),
+    "IV Theater": (34.41249, -119.86155),
+}
+
 
 def academics_page():
-    st.header("🎓 Academics — advising quick links")
+    st.header("🎓 Academics — advising, classes & map")
     st.caption(
-        "Every major has its own plan sheet / prereqs. These are placeholders — swap with official UCSB links."
+        "Plan your major, see classes by quarter, build a schedule, and quickly locate buildings on a map."
     )
 
     courses_df = load_courses_df()
@@ -611,6 +623,7 @@ def academics_page():
             )
 
     with col2:
+        # Quarter planner
         st.subheader("Build your quarter (scratchpad)")
         data = st.data_editor(
             pd.DataFrame(
@@ -625,40 +638,29 @@ def academics_page():
         )
         st.metric("Planned units", int(sum(data["Units"])) if not data.empty else 0)
 
+        st.divider()
+
+        # 🔵 Class Locator map moved here
+        st.subheader("🗺️ Quick class locator")
+        bname = st.selectbox("Choose a building", list(BUILDINGS.keys()))
+        lat, lon = BUILDINGS[bname]
+
+        if HAS_FOLIUM:
+            m = folium.Map(location=[lat, lon], zoom_start=16, control_scale=True)
+            folium.Marker([lat, lon], tooltip=bname).add_to(m)
+            st_folium(m, width=900, height=500)
+        else:
+            st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
+            st.write({"building": bname, "lat": lat, "lon": lon})
+
+        st.caption("Tip: In a future version, you can auto-pin buildings from your full schedule.")
+
     with st.expander("🔗 Add more official links"):
         st.markdown(
             """
             Paste your department URLs here for quick access in future iterations.
             """
         )
-
-# ---------------------------
-# CLASS LOCATION (map)
-# ---------------------------
-BUILDINGS = {
-    "Phelps Hall (PHELP)": (34.41239, -119.84862),
-    "Harold Frank Hall (HFH)": (34.41434, -119.84246),
-    "Chemistry (CHEM)": (34.41165, -119.84586),
-    "HSSB": (34.41496, -119.84571),
-    "Library": (34.41388, -119.84627),
-    "IV Theater": (34.41249, -119.86155),
-}
-
-
-def locator_page():
-    st.header("🗺️ Quick class locator")
-    bname = st.selectbox("Choose a building", list(BUILDINGS.keys()))
-    lat, lon = BUILDINGS[bname]
-
-    if HAS_FOLIUM:
-        m = folium.Map(location=[lat, lon], zoom_start=16, control_scale=True)
-        folium.Marker([lat, lon], tooltip=bname).add_to(m)
-        st_folium(m, width=900, height=500)
-    else:
-        st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
-        st.write({"building": bname, "lat": lat, "lon": lon})
-
-    st.caption("Tip: You can load your full schedule and auto-pin buildings in a future version.")
 
 # ---------------------------
 # PROFESSORS (RMP + dept)
@@ -769,7 +771,6 @@ def qa_page():
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
     "Academics": academics_page,
-    "Class Locator": locator_page,
     "Professors": profs_page,
     "Aid & Jobs": aid_jobs_page,
     "Q&A (WIP)": qa_page,
