@@ -1,12 +1,11 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
-# Main app file
+# Main app file with simple email+password login (SQLite db.sq)
 # ------------------------------------------------------------
 from __future__ import annotations
 import os
 import math
 import sqlite3
-import hashlib
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
@@ -21,13 +20,13 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-# 🔹 import Academics tab from separate file
+# 🔹 Academics tab in a separate file
 from academics import academics_page
 
-# ------------------------------------------------------------
-# 🔐 SIMPLE EMAIL/PASSWORD AUTH (SQLite db.sq)
-# ------------------------------------------------------------
-DB_PATH = "db.sq"
+# ==========================
+# DB / AUTH SETUP
+# ==========================
+DB_PATH = "db.sq"  # SQLite database file; created automatically if missing
 
 
 def get_db() -> sqlite3.Connection:
@@ -36,138 +35,111 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
-def init_db() -> None:
-    """Create tables if they don't exist yet."""
+def init_db():
+    """Create tables if they don't exist."""
     conn = get_db()
-    cur = conn.cursor()
-
-    # Basic users table
-    cur.execute(
+    conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+            password TEXT NOT NULL  -- NOTE: plain text for demo only, hash in real apps
+        );
         """
     )
-
-    # You can add more tables later (plans, etc.)
-
     conn.commit()
     conn.close()
 
 
-def hash_password(password: str) -> str:
-    """Hash password with SHA-256 (simple demo, not enterprise-level)."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
 def create_user(email: str, password: str) -> tuple[bool, str]:
-    """Try to create a new user. Returns (success, message)."""
-    email = email.strip().lower()
+    """Try to create a user; return (success, message)."""
     if not email or not password:
         return False, "Email and password are required."
 
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-            (email, hash_password(password)),
+            "INSERT INTO users (email, password) VALUES (?, ?)",
+            (email.strip(), password),
         )
         conn.commit()
-        return True, "Account created. You are now logged in."
     except sqlite3.IntegrityError:
-        return False, "That email is already registered. Try logging in instead."
-    finally:
         conn.close()
+        return False, "An account with that email already exists."
+    conn.close()
+    return True, "Account created. You can log in now."
 
 
-def check_user(email: str, password: str) -> bool:
-    """Return True if the email/password combo is valid."""
-    email = email.strip().lower()
+def check_credentials(email: str, password: str) -> bool:
+    """Return True if email/password match a user in the DB."""
     conn = get_db()
     cur = conn.execute(
-        "SELECT password_hash FROM users WHERE email = ?",
-        (email,),
+        "SELECT password FROM users WHERE email = ?",
+        (email.strip(),),
     )
     row = cur.fetchone()
     conn.close()
-    if not row:
+    if row is None:
         return False
-    return row["password_hash"] == hash_password(password)
+    return row["password"] == password
 
 
-def ensure_session_keys():
-    if "user_email" not in st.session_state:
-        st.session_state["user_email"] = None
-
-
-def auth_sidebar():
+def login_widget() -> Optional[str]:
     """
-    Sidebar UI for login / signup.
-    If user is not logged in, this will stop the app after showing the form.
+    Show login / signup controls in the sidebar.
+    Return the logged-in email, or None if not logged in.
     """
-    ensure_session_keys()
+    init_db()  # ensure tables exist
 
-    # If already logged in: show status + logout
-    if st.session_state["user_email"]:
+    # If already logged in, show info + logout
+    if "user_email" in st.session_state and st.session_state["user_email"]:
         st.sidebar.markdown(f"**Logged in as:** `{st.session_state['user_email']}`")
         if st.sidebar.button("Log out"):
             st.session_state["user_email"] = None
             st.experimental_rerun()
-        return  # allow rest of app to render
+        return st.session_state["user_email"]
 
-    st.sidebar.subheader("Account")
+    st.sidebar.markdown("### Log in")
 
-    mode = st.sidebar.radio("Choose an option", ["Log in", "Sign up"], horizontal=True)
+    with st.sidebar.form("login_form", clear_on_submit=False):
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+        submitted = st.form_submit_button("Log in")
 
-    email = st.sidebar.text_input("Email", key="auth_email")
-    password = st.sidebar.text_input("Password", type="password", key="auth_password")
+    if submitted:
+        if check_credentials(email, password):
+            st.session_state["user_email"] = email.strip()
+            st.experimental_rerun()
+        else:
+            st.sidebar.error("Invalid email or password.")
 
-    if mode == "Sign up":
-        password2 = st.sidebar.text_input(
-            "Confirm password", type="password", key="auth_password2"
-        )
-        if st.sidebar.button("Create account"):
-            if password != password2:
-                st.sidebar.error("Passwords do not match.")
-            else:
-                ok, msg = create_user(email, password)
-                if ok:
-                    st.sidebar.success(msg)
-                    st.session_state["user_email"] = email.strip().lower()
-                    st.experimental_rerun()
-                else:
-                    st.sidebar.error(msg)
-    else:  # Log in
-        if st.sidebar.button("Log in"):
-            if check_user(email, password):
-                st.session_state["user_email"] = email.strip().lower()
-                st.experimental_rerun()
-            else:
-                st.sidebar.error("Invalid email or password.")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Create account")
 
-    # If we got here, user is not logged in yet → stop app so pages don't show
-    st.stop()
+    with st.sidebar.form("signup_form", clear_on_submit=True):
+        new_email = st.text_input("New email", key="signup_email")
+        new_pw = st.text_input("New password", type="password", key="signup_password")
+        signup_submit = st.form_submit_button("Sign up")
+
+    if signup_submit:
+        ok, msg = create_user(new_email, new_pw)
+        if ok:
+            st.sidebar.success(msg)
+        else:
+            st.sidebar.error(msg)
+
+    return None
 
 
-# ---------------------------
-# Page config
-# ---------------------------
+# ==========================
+# PAGE CONFIG & STYLING
+# ==========================
 st.set_page_config(
     page_title="gauchoGPT — UCSB helper",
     page_icon="🧢",
     layout="wide",
 )
 
-# Init DB (creates db.sq + tables if missing)
-init_db()
-
-# ---------------------------
-# UCSB GOLD theme + style helpers
-# ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
     [data-testid="stAppViewContainer"] { background: #ffffff; }
@@ -301,7 +273,7 @@ HIDE_STREAMLIT_STYLE = """
 
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
-# GOLD-style header bar (like UCSB GOLD)
+# Header bar
 st.markdown(
     """
     <div class="gold-topbar">
@@ -312,33 +284,264 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar title + auth box
+# Sidebar app title (login widget handles auth)
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
 
-# 🔐 Show login / signup in the sidebar
-auth_sidebar()  # stops app if not logged in
+# 🔐 Require login via sidebar
+logged_in_email = login_widget()
+if not logged_in_email:
+    # User is not logged in; stop rendering rest of the app
+    st.stop()
 
-# At this point, st.session_state["user_email"] is guaranteed not None
-st.sidebar.markdown(f"**Logged in as:** `{st.session_state['user_email']}`")
-
-# ---------------------------
-# HOUSING — CSV-backed listings
-# ---------------------------
+# ==========================
+# HOUSING
+# ==========================
 HOUSING_CSV = "iv_housing_listings.csv"
 
-# (housing_page stays the same as you had)
-# ... [KEEP your existing load_housing_df and housing_page definitions here]
-# I’m not repeating them just to keep this message shorter, but you can
-# paste your same housing code below this comment.
 
-# ---------------------------
-# (Put your existing load_housing_df and housing_page code here)
-# ---------------------------
+def load_housing_df() -> Optional[pd.DataFrame]:
+    """Load and lightly clean the housing CSV."""
+    if not os.path.exists(HOUSING_CSV):
+        st.error(f"Missing CSV file: {HOUSING_CSV}. Place it next to gauchoGPT.py.")
+        return None
 
-# ---------------------------
-# PROFESSORS (RMP + dept)
-# ---------------------------
+    df = pd.read_csv(HOUSING_CSV)
+
+    for col in [
+        "street", "unit", "avail_start", "avail_end",
+        "price", "bedrooms", "bathrooms", "max_residents",
+        "utilities", "pet_policy", "pet_friendly",
+    ]:
+        if col not in df.columns:
+            df[col] = None
+
+    if "status" not in df.columns:
+        df["status"] = "available"
+    if "is_studio" not in df.columns:
+        df["is_studio"] = df.get("bedrooms", 0).fillna(0).astype(float).eq(0)
+
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
+    df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
+    df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
+
+    df["pet_friendly"] = df["pet_friendly"].astype(bool)
+
+    df["price_per_person"] = df.apply(
+        lambda row: row["price"] / row["max_residents"]
+        if pd.notnull(row["price"]) and pd.notnull(row["max_residents"]) and row["max_residents"] > 0
+        else None,
+        axis=1,
+    )
+
+    return df
+
+
+def housing_page():
+    st.header("🏠 Isla Vista Housing (CSV snapshot)")
+    st.caption(
+        "Snapshot of selected Isla Vista units from ivproperties.com for the 2026–27 lease term. "
+        "Filters below help you find fits by price, bedrooms, status, and pet policy."
+    )
+
+    df = load_housing_df()
+    if df is None or df.empty:
+        st.warning("No housing data found in the CSV.")
+        return
+
+    col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.5, 1.5, 1.5])
+
+    with col_f1:
+        max_price_val = int(df["price"].max()) if df["price"].notna().any() else 10000
+        min_price_val = int(df["price"].min()) if df["price"].notna().any() else 0
+        price_limit = st.slider(
+            "Max monthly installment",
+            min_value=min_price_val,
+            max_value=max_price_val,
+            value=max_price_val,
+            step=100,
+        )
+
+    with col_f2:
+        bedroom_choice = st.selectbox(
+            "Bedrooms",
+            ["Any", "Studio", "1", "2", "3", "4", "5+"],
+            index=0,
+        )
+
+    with col_f3:
+        status_choice = st.selectbox(
+            "Status filter",
+            ["Available only", "All statuses", "Processing only", "Leased only"],
+            index=0,
+        )
+
+    with col_f4:
+        pet_choice = st.selectbox(
+            "Pet policy",
+            ["Any", "Only pet-friendly", "No pets allowed"],
+            index=0,
+        )
+
+    filtered = df.copy()
+    filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
+
+    if bedroom_choice == "Studio":
+        filtered = filtered[filtered["is_studio"] == True]
+    elif bedroom_choice == "5+":
+        filtered = filtered[filtered["bedrooms"] >= 5]
+    elif bedroom_choice not in ("Any", "Studio", "5+"):
+        try:
+            b_val = int(bedroom_choice)
+            filtered = filtered[filtered["bedrooms"] == b_val]
+        except ValueError:
+            pass
+
+    status_choice_lower = status_choice.lower()
+    if status_choice_lower.startswith("available"):
+        filtered = filtered[filtered["status"] == "available"]
+    elif status_choice_lower.startswith("processing"):
+        filtered = filtered[filtered["status"] == "processing"]
+    elif status_choice_lower.startswith("leased"):
+        filtered = filtered[filtered["status"] == "leased"]
+
+    if pet_choice == "Only pet-friendly":
+        filtered = filtered[filtered["pet_friendly"] == True]
+    elif pet_choice == "No pets allowed":
+        filtered = filtered[
+            (filtered["pet_friendly"] == False)
+            | (filtered["pet_policy"].fillna("").str.contains("No pets", case=False))
+        ]
+
+    st.markdown(
+        f"""
+        <div class='small muted'>
+        Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
+        • Price ≤ <span class='pill'>${price_limit:,}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if filtered.empty:
+        st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
+        return
+
+    with st.expander("📊 View table of filtered units"):
+        st.dataframe(
+            filtered[
+                [
+                    "street",
+                    "unit",
+                    "status",
+                    "avail_start",
+                    "avail_end",
+                    "price",
+                    "bedrooms",
+                    "bathrooms",
+                    "max_residents",
+                    "pet_policy",
+                    "utilities",
+                    "price_per_person",
+                ]
+            ],
+            use_container_width=True,
+        )
+
+    for _, row in filtered.sort_values(["street", "unit"]).iterrows():
+        street = row.get("street", "")
+        unit = row.get("unit", "")
+        price = row.get("price", None)
+        bd = row.get("bedrooms", None)
+        ba = row.get("bathrooms", None)
+        max_res = row.get("max_residents", None)
+        utilities = row.get("utilities", "")
+        pet_policy = row.get("pet_policy", "")
+        pet_friendly = bool(row.get("pet_friendly", False))
+        avail_start = row.get("avail_start", "")
+        avail_end = row.get("avail_end", "")
+        status = (row.get("status") or "available").lower()
+        is_studio = bool(row.get("is_studio", False))
+        ppp = row.get("price_per_person", None)
+
+        if status == "available":
+            status_text = f"Available {avail_start}–{avail_end} (applications open)"
+            status_badge_class = "ok"
+        elif status == "processing":
+            status_text = "Processing applications"
+            status_badge_class = "warn"
+        elif status == "leased":
+            status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
+            status_badge_class = "muted"
+        else:
+            status_text = status
+            status_badge_class = "muted"
+
+        if is_studio:
+            bed_label = "Studio"
+        else:
+            bed_label = f"{int(bd) if not pd.isna(bd) else '?'} bed"
+
+        if not pd.isna(ba):
+            if float(ba).is_integer():
+                ba_label = f"{int(ba)} bath"
+            else:
+                ba_label = f"{ba} bath"
+        else:
+            ba_label = "? bath"
+
+        residents_label = f"Up to {int(max_res)} residents" if not pd.isna(max_res) else "Max residents: ?"
+
+        if not pd.isna(price):
+            price_text = f"${int(price):,}/installment"
+        else:
+            price_text = "Price not listed"
+
+        ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
+
+        st.markdown("---")
+        st.markdown(f"### {street}")
+        st.markdown(f"**{unit}**")
+
+        st.markdown(
+            f"""
+            <div class='small'>
+                <span class='pill'>{bed_label}</span>
+                <span class='pill'>{ba_label}</span>
+                <span class='pill'>{residents_label}</span>
+                <span class='pill'>{pet_policy or ("Pet friendly" if pet_friendly else "No pets info")}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f"""
+            <div class='small'>
+                <span class='{status_badge_class}'>{status_text}</span><br/>
+                <span class='ok'>{price_text}</span>
+                {" · " + ppp_text if ppp_text else ""}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if utilities:
+            st.markdown(
+                f"<div class='small muted'>Included utilities: {utilities}</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+    st.caption(
+        "Note: This is a manually curated CSV snapshot based on ivproperties.com. "
+        "Always verify current availability and pricing directly with the property manager."
+    )
+
+# ==========================
+# PROFESSORS
+# ==========================
 DEPT_SITES = {
     "PSTAT": "https://www.pstat.ucsb.edu/people",
     "CS": "https://www.cs.ucsb.edu/people/faculty",
@@ -371,9 +574,9 @@ def profs_page():
         """
     )
 
-# ---------------------------
-# FINANCIAL AID & JOBS
-# ---------------------------
+# ==========================
+# AID & JOBS
+# ==========================
 AID_LINKS = {
     "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
     "UCSB Financial Aid": "https://www.finaid.ucsb.edu/",
@@ -414,9 +617,9 @@ def aid_jobs_page():
     for label, url in AID_LINKS.items():
         st.link_button(label, url)
 
-# ---------------------------
-# Q&A placeholder
-# ---------------------------
+# ==========================
+# Q&A PLACEHOLDER
+# ==========================
 def qa_page():
     st.header("💬 Ask gauchoGPT (placeholder)")
     st.caption("Wire this to your preferred LLM API or a local model.")
@@ -439,9 +642,9 @@ def qa_page():
             language="python",
         )
 
-# ---------------------------
-# GOLD-style main navigation (horizontal, like GOLD tabs)
-# ---------------------------
+# ==========================
+# NAVIGATION
+# ==========================
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
     "Academics": academics_page,  # from academics.py
