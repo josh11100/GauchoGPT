@@ -624,21 +624,73 @@ def academics_page():
                             "in `major_courses_by_quarter.csv` yet."
                         )
                     else:
-                        cols_to_show = ["course_code", "title", "units"]
-                        if "status" in quarter_filtered.columns:
-                            cols_to_show.append("status")
-                        if "notes" in quarter_filtered.columns:
-                            cols_to_show.append("notes")
+                        # Small summary (how many open / full / mixed)
+                        open_count = (quarter_filtered["status"].str.lower() == "open").sum()
+                        full_count = (quarter_filtered["status"].str.lower() == "full").sum()
+                        mixed_count = (quarter_filtered["status"].str.lower() == "mixed").sum()
 
                         st.markdown(
-                            f"Showing **{len(quarter_filtered)}** class(es) "
-                            f"for **{major}** in **{quarter}**."
+                            f"""
+                            <div class='small muted'>
+                                Showing <strong>{len(quarter_filtered)}</strong> class(es)
+                                for <strong>{major}</strong> in <strong>{quarter}</strong> ·
+                                <span class='ok'>Open: {open_count}</span> ·
+                                <span class='warn'>Mixed: {mixed_count}</span> ·
+                                <span class='err'>Full: {full_count}</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
                         )
 
-                        st.dataframe(
-                            quarter_filtered[cols_to_show],
-                            use_container_width=True,
-                        )
+                        st.markdown("---")
+
+                        # Render each course as a GOLD-style block (like GOLD search results)
+                        for _, row in quarter_filtered.iterrows():
+                            code = row.get("course_code", "").strip()
+                            title = row.get("title", "").strip()
+                            units = row.get("units", "")
+                            status = str(row.get("status", "") or "").strip()
+                            notes = str(row.get("notes", "") or "").strip()
+
+                            # Units label
+                            units_label = f"Units: {units}" if units not in (None, "", float("nan")) else "Units: n/a"
+
+                            # Status color class matching your CSS helpers
+                            status_lower = status.lower()
+                            if status_lower == "open":
+                                status_class = "ok"
+                                status_bg = "#ecfdf3"
+                            elif status_lower == "full":
+                                status_class = "err"
+                                status_bg = "#fef2f2"
+                            elif status_lower == "mixed":
+                                status_class = "warn"
+                                status_bg = "#fffbeb"
+                            else:
+                                status_class = "muted"
+                                status_bg = "#f3f4f6"
+
+                            st.markdown(
+                                f"""
+                                <div style="border-radius: 8px; overflow: hidden;
+                                            border: 1px solid #e5e7eb; margin-bottom: 12px;
+                                            box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
+                                  <div style="background:#003660; color:#ffffff;
+                                              padding:6px 12px; font-weight:600;
+                                              font-size:0.95rem;">
+                                    {code} — {title}
+                                  </div>
+                                  <div style="padding:8px 12px; font-size:0.9rem;">
+                                    <span class="pill">{units_label}</span>
+                                    <span class="pill" style="background:{status_bg};">
+                                      <span class="{status_class}">{status or "Status n/a"}</span>
+                                    </span>
+                                    {"<div class='small muted' style='margin-top:4px;'>" + notes + "</div>" if notes else ""}
+                                  </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
                 else:
                     st.info(
                         f"No quarter information found for **{major}** in the CSV."
