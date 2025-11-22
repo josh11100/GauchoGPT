@@ -35,7 +35,7 @@ MAJOR_SHEETS = {
 }
 
 # ---------------------------
-# CLASS LOCATION (map) – data used inside Academics page
+# CLASS LOCATION (map)
 # ---------------------------
 BUILDINGS = {
     "Phelps Hall (PHELP)": (34.41239, -119.84862),
@@ -48,25 +48,11 @@ BUILDINGS = {
 
 
 def load_courses_df() -> Optional[pd.DataFrame]:
-    """
-    Load a CSV with class offerings by major and quarter.
-
-    Expected columns (case-insensitive, but best to match exactly):
-    - major
-    - course_code
-    - title
-    - quarter       (Fall/Winter/Spring/Summer)
-    Optional:
-    - units         (numeric or range as string)
-    - status        (Open / Full / Mixed / etc.)
-    - notes         (text)
-    """
     if not os.path.exists(COURSES_CSV):
         return None
 
     df = pd.read_csv(COURSES_CSV)
 
-    # Normalize column names
     df.columns = [c.strip().lower() for c in df.columns]
 
     for col in ["major", "course_code", "title", "quarter"]:
@@ -82,7 +68,6 @@ def load_courses_df() -> Optional[pd.DataFrame]:
         df["notes"] = ""
 
     df["quarter"] = df["quarter"].astype(str).str.strip().str.title()
-
     return df
 
 
@@ -95,9 +80,7 @@ def academics_page():
 
     courses_df = load_courses_df()
 
-    # ---------------------------
-    # Major selector + main link
-    # ---------------------------
+    # Major selector + link
     major = st.selectbox(
         "Select a major",
         list(MAJOR_SHEETS.keys()),
@@ -110,16 +93,11 @@ def academics_page():
 
     st.divider()
 
-    # ---------------------------
-    # Tabs for organization
-    # ---------------------------
     tab_classes, tab_planner, tab_map, tab_faq = st.tabs(
         ["Classes by quarter", "My quarter planner", "Class locator map", "FAQ"]
     )
 
-    # ===========================
-    # TAB 1: CLASSES BY QUARTER
-    # ===========================
+    # ========= TAB 1: CLASSES =========
     with tab_classes:
         st.subheader("Classes by quarter (from your CSV)")
 
@@ -167,7 +145,6 @@ def academics_page():
                             "in `major_courses_by_quarter.csv` yet."
                         )
                     else:
-                        # Summary
                         open_count = (quarter_filtered["status"].str.lower() == "open").sum()
                         full_count = (quarter_filtered["status"].str.lower() == "full").sum()
                         mixed_count = (quarter_filtered["status"].str.lower() == "mixed").sum()
@@ -187,10 +164,10 @@ def academics_page():
 
                         st.markdown("---")
 
-                        # 🔵 NEW: show cards 2 per row using columns
-                        for i in range(0, len(quarter_filtered), 2):
-                            cols = st.columns(2, gap="medium")
-                            for j in range(2):
+                        # 🔵 3 CARDS PER ROW
+                        for i in range(0, len(quarter_filtered), 3):
+                            cols = st.columns(3, gap="medium")
+                            for j in range(3):
                                 idx = i + j
                                 if idx >= len(quarter_filtered):
                                     break
@@ -249,9 +226,7 @@ def academics_page():
                         f"No quarter information found for **{major}** in the CSV."
                     )
 
-    # ===========================
-    # TAB 2: QUARTER PLANNER
-    # ===========================
+    # ========= TAB 2: PLANNER =========
     with tab_planner:
         st.subheader("Build your quarter (scratchpad)")
         st.caption(
@@ -284,9 +259,7 @@ def academics_page():
             """
         )
 
-    # ===========================
-    # TAB 3: CLASS LOCATOR MAP
-    # ===========================
+    # ========= TAB 3: MAP =========
     with tab_map:
         st.subheader("🗺️ Quick class locator")
 
@@ -303,9 +276,7 @@ def academics_page():
 
         st.caption("Future idea: auto-pin all buildings from your full GOLD schedule.")
 
-    # ===========================
-    # TAB 4: FAQ
-    # ===========================
+    # ========= TAB 4: FAQ =========
     with tab_faq:
         st.subheader("Common advising questions")
 
