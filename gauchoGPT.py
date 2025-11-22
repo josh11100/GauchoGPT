@@ -1,11 +1,6 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
-# A single-file Streamlit web app to help UCSB students with:
-# - Housing in Isla Vista (CSV-backed listings from ivproperties.com)
-# - Academic advising quick links (major sheets / prereqs — placeholders)
-# - Class/location helper with campus map pins (inside Academics tab)
-# - Professor info shortcuts (RateMyProfessors + UCSB departmental pages)
-# - Financial aid & jobs FAQs (with handy links)
+# Main app file
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -25,6 +20,9 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
+# 🔹 import Academics tab from separate file
+from academics import academics_page
+
 # ---------------------------
 # Page config
 # ---------------------------
@@ -39,22 +37,18 @@ st.set_page_config(
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
-    /* ------- App background + base text ------- */
-    [data-testid="stAppViewContainer"] {
-        background: #ffffff;
-    }
+    /* (same CSS you already had) */
+    [data-testid="stAppViewContainer"] { background: #ffffff; }
     h1, h2, h3, h4 {
-        color: #003660; /* UCSB navy */
+        color: #003660;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     body, p, label, span, div {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-
-    /* ------- Top GOLD-style header bar ------- */
     .gold-topbar {
         width: 100%;
-        background: #003660; /* deep navy */
+        background: #003660;
         color: #ffffff;
         padding: 10px 24px;
         display: flex;
@@ -71,34 +65,24 @@ HIDE_STREAMLIT_STYLE = """
         letter-spacing: 0.04em;
         text-transform: uppercase;
     }
-    .gold-topbar-right {
-        font-weight: 500;
-        opacity: 0.9;
-    }
-
-    /* ------- Second bar: GOLD navigation tabs (horizontal radio in main area) ------- */
+    .gold-topbar-right { font-weight: 500; opacity: 0.9; }
     .gold-nav-wrapper {
         width: 100%;
-        background: #FDB515; /* UCSB gold */
+        background: #FDB515;
         padding: 4px 24px 0 24px;
         box-shadow: 0 1px 2px rgba(15,23,42,0.15);
         margin-bottom: 12px;
     }
-
-    /* This targets the horizontal radio group we use for main nav */
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] {
-        gap: 0;
-    }
+    [data-testid="stHorizontalBlock"] [role="radiogroup"] { gap: 0; }
     [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
         cursor: pointer;
         padding: 10px 24px;
         border-radius: 0;
         border: none;
         background: transparent;
-        color: #374151; /* slate */
+        color: #374151;
         margin-right: 16px;
     }
-    /* hide the actual radio circle in the top nav */
     [data-testid="stHorizontalBlock"] [role="radio"] > div:first-child {
         display: none !important;
     }
@@ -118,8 +102,6 @@ HIDE_STREAMLIT_STYLE = """
         letter-spacing: 0.06em;
         margin-bottom: 0;
     }
-
-    /* ------- Sidebar: light column like GOLD left section ------- */
     [data-testid="stSidebar"] {
         background: #f3f4f6;
         border-right: 1px solid #d1d5db;
@@ -131,11 +113,7 @@ HIDE_STREAMLIT_STYLE = """
         padding-left: 1rem;
         padding-right: 1rem;
     }
-    [data-testid="stSidebar"] * {
-        color: #111827 !important;
-    }
-
-    /* ------- Buttons in GOLD/NAVY (general buttons, NOT top nav) ------- */
+    [data-testid="stSidebar"] * { color: #111827 !important; }
     .stButton > button, .st-link-button {
         border-radius: 9999px;
         border-width: 0;
@@ -149,13 +127,10 @@ HIDE_STREAMLIT_STYLE = """
         background: #FDB515;
         color: #111827;
     }
-
-    /* ------- Tables / cards look closer to GOLD ------- */
     .stDataFrame thead tr th {
         background-color: #003660 !important;
         color: #f9fafb !important;
     }
-
     .small {font-size: 0.85rem; color: #4b5563;}
     .muted {color:#6b7280;}
     .pill {
@@ -186,8 +161,6 @@ HIDE_STREAMLIT_STYLE = """
     .ok   {color:#059669; font-weight:600}
     .warn {color:#b45309; font-weight:600}
     .err  {color:#b91c1c; font-weight:700}
-
-    /* Expander headers hover */
     [data-testid="stExpander"] > summary:hover {
         color: #003660;
     }
@@ -207,19 +180,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar info (not main nav anymore)
+# Sidebar info
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
 
 # ---------------------------
 # HOUSING — CSV-backed listings
 # ---------------------------
-HOUSING_CSV = "iv_housing_listings.csv"  # make sure this file exists in the same folder
-
-# ---------------------------
-# ACADEMICS — classes by quarter (CSV)
-# ---------------------------
-COURSES_CSV = "major_courses_by_quarter.csv"  # CSV for classes by major & quarter
+HOUSING_CSV = "iv_housing_listings.csv"
 
 
 def load_housing_df() -> Optional[pd.DataFrame]:
@@ -239,67 +207,24 @@ def load_housing_df() -> Optional[pd.DataFrame]:
         if col not in df.columns:
             df[col] = None
 
-    # Optional / new columns
     if "status" not in df.columns:
         df["status"] = "available"
     if "is_studio" not in df.columns:
         df["is_studio"] = df.get("bedrooms", 0).fillna(0).astype(float).eq(0)
 
-    # Type cleaning
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
 
-    # booleans
     df["pet_friendly"] = df["pet_friendly"].astype(bool)
 
-    # Derived feature: price per person
     df["price_per_person"] = df.apply(
         lambda row: row["price"] / row["max_residents"]
         if pd.notnull(row["price"]) and pd.notnull(row["max_residents"]) and row["max_residents"] > 0
         else None,
         axis=1,
     )
-
-    return df
-
-
-def load_courses_df() -> Optional[pd.DataFrame]:
-    """
-    Load a CSV with class offerings by major and quarter.
-
-    Expected columns (case-insensitive, but best to match exactly):
-    - major
-    - course_code
-    - title
-    - quarter       (Fall/Winter/Spring/Summer)
-    Optional:
-    - units         (numeric or range as string)
-    - status        (Open / Full / Mixed / etc.)
-    - notes         (text)
-    """
-    if not os.path.exists(COURSES_CSV):
-        return None
-
-    df = pd.read_csv(COURSES_CSV)
-
-    # Normalize column names
-    df.columns = [c.strip().lower() for c in df.columns]
-
-    for col in ["major", "course_code", "title", "quarter"]:
-        if col not in df.columns:
-            st.error(f"'{COURSES_CSV}' is missing required column: '{col}'")
-            return None
-
-    if "units" not in df.columns:
-        df["units"] = None
-    if "status" not in df.columns:
-        df["status"] = ""
-    if "notes" not in df.columns:
-        df["notes"] = ""
-
-    df["quarter"] = df["quarter"].astype(str).str.strip().str.title()
 
     return df
 
@@ -352,10 +277,8 @@ def housing_page():
 
     filtered = df.copy()
 
-    # Price
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
-    # Bedrooms / studio
     if bedroom_choice == "Studio":
         filtered = filtered[filtered["is_studio"] == True]
     elif bedroom_choice == "5+":
@@ -367,7 +290,6 @@ def housing_page():
         except ValueError:
             pass
 
-    # Status
     status_choice_lower = status_choice.lower()
     if status_choice_lower.startswith("available"):
         filtered = filtered[filtered["status"] == "available"]
@@ -376,7 +298,6 @@ def housing_page():
     elif status_choice_lower.startswith("leased"):
         filtered = filtered[filtered["status"] == "leased"]
 
-    # Pets
     if pet_choice == "Only pet-friendly":
         filtered = filtered[filtered["pet_friendly"] == True]
     elif pet_choice == "No pets allowed":
@@ -511,300 +432,6 @@ def housing_page():
     )
 
 # ---------------------------
-# ACADEMICS (advising quick links)
-# ---------------------------
-MAJOR_SHEETS = {
-    "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergraduate/majors-minors/stats-and-data-science-major",
-    "Computer Science": "https://cs.ucsb.edu/education/undergraduate/current-students",
-    "Economics": "https://econ.ucsb.edu/programs/undergraduate/majors",
-    "Mathematics": "https://www.math.ucsb.edu/undergraduate/proposed-courses-study-plans",
-    "Biology": "https://ucsbcatalog.coursedog.com/programs/BSBIOSC",
-    "Psychology": "https://psych.ucsb.edu/undergraduate/major-requirements",
-    "Chemistry": "https://undergrad.chem.ucsb.edu/academic-programs/chemistry-bs",
-    "Physics": "https://www.physics.ucsb.edu/academics/undergraduate/majors",
-    "Philosophy": "https://www.philosophy.ucsb.edu/undergraduate/undergraduate-major-philosophy",
-    "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
-}
-
-# ---------------------------
-# CLASS LOCATION (map) – data used inside Academics page
-# ---------------------------
-BUILDINGS = {
-    "Phelps Hall (PHELP)": (34.41239, -119.84862),
-    "Harold Frank Hall (HFH)": (34.41434, -119.84246),
-    "Chemistry (CHEM)": (34.41165, -119.84586),
-    "HSSB": (34.41496, -119.84571),
-    "Library": (34.41388, -119.84627),
-    "IV Theater": (34.41249, -119.86155),
-}
-
-
-def academics_page():
-    st.header("🎓 Academics — advising, classes & map")
-    st.caption(
-        "Open your major sheet, see classes by quarter from your CSV, build a schedule, "
-        "and quickly locate buildings on a map."
-    )
-
-    # Load course CSV once
-    courses_df = load_courses_df()
-
-    # ---------------------------
-    # Major selector + main link
-    # ---------------------------
-    major = st.selectbox(
-        "Select a major",
-        list(MAJOR_SHEETS.keys()),
-        index=0,
-        key="acad_major",
-    )
-
-    st.markdown("#### Major plan sheet")
-    st.link_button("Open major planning page", MAJOR_SHEETS[major])
-
-    st.divider()
-
-    # ---------------------------
-    # Tabs for organization
-    # ---------------------------
-    tab_classes, tab_planner, tab_map, tab_faq = st.tabs(
-        ["Classes by quarter", "My quarter planner", "Class locator map", "FAQ"]
-    )
-
-    # ===========================
-    # TAB 1: CLASSES BY QUARTER
-    # ===========================
-    with tab_classes:
-        st.subheader("Classes by quarter (from your CSV)")
-
-        if courses_df is None:
-            st.caption(
-                "To use this section, add a CSV named `major_courses_by_quarter.csv` "
-                "in this folder. Required columns: `major`, `course_code`, `title`, "
-                "`quarter`. Optional: `units`, `status`, `notes`."
-            )
-        else:
-            # Filter by selected major
-            major_filtered = courses_df[courses_df["major"] == major]
-
-            if major_filtered.empty:
-                st.info(f"No entries found in the CSV yet for **{major}**.")
-            else:
-                # Get quarters actually present for this major (e.g. Winter only for your PSTAT CSV)
-                available_quarters = (
-                    major_filtered["quarter"]
-                    .dropna()
-                    .astype(str)
-                    .str.title()
-                    .unique()
-                    .tolist()
-                )
-                available_quarters = sorted(available_quarters)
-
-                # Default to Winter if present, otherwise first quarter
-                default_q = "Winter" if "Winter" in available_quarters else (
-                    available_quarters[0] if available_quarters else None
-                )
-
-                if available_quarters and default_q is not None:
-                    quarter = st.selectbox(
-                        "Quarter",
-                        available_quarters,
-                        index=available_quarters.index(default_q),
-                        key="acad_quarter",
-                    )
-
-                    quarter_filtered = major_filtered[
-                        major_filtered["quarter"].astype(str).str.title() == quarter
-                    ]
-
-                    if quarter_filtered.empty:
-                        st.info(
-                            f"No classes listed for **{major}** in **{quarter}** "
-                            "in `major_courses_by_quarter.csv` yet."
-                        )
-                    else:
-                        # Small summary (how many open / full / mixed)
-                        open_count = (quarter_filtered["status"].str.lower() == "open").sum()
-                        full_count = (quarter_filtered["status"].str.lower() == "full").sum()
-                        mixed_count = (quarter_filtered["status"].str.lower() == "mixed").sum()
-
-                        st.markdown(
-                            f"""
-                            <div class='small muted'>
-                                Showing <strong>{len(quarter_filtered)}</strong> class(es)
-                                for <strong>{major}</strong> in <strong>{quarter}</strong> ·
-                                <span class='ok'>Open: {open_count}</span> ·
-                                <span class='warn'>Mixed: {mixed_count}</span> ·
-                                <span class='err'>Full: {full_count}</span>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
-                        st.markdown("---")
-
-                        # Render each course as a GOLD-style block (like GOLD search results)
-                        for _, row in quarter_filtered.iterrows():
-                            code = row.get("course_code", "").strip()
-                            title = row.get("title", "").strip()
-                            units = row.get("units", "")
-                            status = str(row.get("status", "") or "").strip()
-                            notes = str(row.get("notes", "") or "").strip()
-
-                            # Units label
-                            units_label = f"Units: {units}" if units not in (None, "", float("nan")) else "Units: n/a"
-
-                            # Status color class matching your CSS helpers
-                            status_lower = status.lower()
-                            if status_lower == "open":
-                                status_class = "ok"
-                                status_bg = "#ecfdf3"
-                            elif status_lower == "full":
-                                status_class = "err"
-                                status_bg = "#fef2f2"
-                            elif status_lower == "mixed":
-                                status_class = "warn"
-                                status_bg = "#fffbeb"
-                            else:
-                                status_class = "muted"
-                                status_bg = "#f3f4f6"
-
-                            st.markdown(
-                                f"""
-                                <div style="border-radius: 8px; overflow: hidden;
-                                            border: 1px solid #e5e7eb; margin-bottom: 12px;
-                                            box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
-                                  <div style="background:#003660; color:#ffffff;
-                                              padding:6px 12px; font-weight:600;
-                                              font-size:0.95rem;">
-                                    {code} — {title}
-                                  </div>
-                                  <div style="padding:8px 12px; font-size:0.9rem;">
-                                    <span class="pill">{units_label}</span>
-                                    <span class="pill" style="background:{status_bg};">
-                                      <span class="{status_class}">{status or "Status n/a"}</span>
-                                    </span>
-                                    {"<div class='small muted' style='margin-top:4px;'>" + notes + "</div>" if notes else ""}
-                                  </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
-                else:
-                    st.info(
-                        f"No quarter information found for **{major}** in the CSV."
-                    )
-
-    # ===========================
-    # TAB 2: QUARTER PLANNER
-    # ===========================
-    with tab_planner:
-        st.subheader("Build your quarter (scratchpad)")
-        st.caption(
-            "This is just a planner for you. It doesn’t talk to GOLD yet — use it to play "
-            "with different course combos and unit loads."
-        )
-
-        default_rows = [
-            {"Course": "PSTAT 5A", "Units": 5, "Type": "Major prep"},
-            {"Course": "PSTAT 120A", "Units": 4, "Type": "Major"},
-            {"Course": "GE Area D", "Units": 4, "Type": "GE"},
-        ]
-
-        data = st.data_editor(
-            pd.DataFrame(default_rows),
-            use_container_width=True,
-            num_rows="dynamic",
-            key="acad_planner",
-        )
-
-        total_units = int(sum(data["Units"])) if not data.empty and "Units" in data.columns else 0
-        st.metric("Planned units", total_units)
-
-        st.markdown(
-            """
-            **Tips**
-            - Many students aim for **12–16 units** per quarter.
-            - Try balancing **1–2 heavy technical** classes with **1 lighter GE**.
-            - Check your major’s sample plan and talk to an advisor if you’re unsure.
-            """
-        )
-
-    # ===========================
-    # TAB 3: CLASS LOCATOR MAP
-    # ===========================
-    with tab_map:
-        st.subheader("🗺️ Quick class locator")
-
-        bname = st.selectbox("Choose a building", list(BUILDINGS.keys()), key="acad_building")
-        lat, lon = BUILDINGS[bname]
-
-        if HAS_FOLIUM:
-            m = folium.Map(location=[lat, lon], zoom_start=16, control_scale=True)
-            folium.Marker([lat, lon], tooltip=bname).add_to(m)
-            st_folium(m, width=900, height=500)
-        else:
-            st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
-            st.write({"building": bname, "lat": lat, "lon": lon})
-
-        st.caption("Future idea: auto-pin all buildings from your full GOLD schedule.")
-
-    # ===========================
-    # TAB 4: FAQ
-    # ===========================
-    with tab_faq:
-        st.subheader("Common advising questions")
-
-        with st.expander("Still lost on what classes to take?"):
-            st.markdown(
-                """
-                Use your department’s official advising resources (linked above) and schedule an
-                appointment. Bring:
-                - Your current and past schedules  
-                - A list of courses you're considering  
-                - Questions about double majors, minors, or 4-year plans  
-                """
-            )
-
-        with st.expander("Can’t find your specific major in this app?"):
-            st.markdown(
-                """
-                Right now this app only has a small set of majors.  
-                You can:
-                - Use the **UCSB Catalog** and your department’s website  
-                - Ask the app maintainer to add your major + links in a future update  
-                """
-            )
-
-        with st.expander("Not sure how many classes to take in a quarter?"):
-            st.markdown(
-                """
-                A common pattern is:
-                - **12 units** → lighter load  
-                - **16 units** → typical full load  
-                - **20+ units** → heavy load, usually needs approval  
-
-                Always check:
-                - Financial aid unit requirements  
-                - Major sample plans  
-                - How intense your technical courses are  
-                """
-            )
-
-        with st.expander("Class is full or waitlisted — what now?"):
-            st.markdown(
-                """
-                - Use the **GOLD waitlist** when available  
-                - Watch for adds/drops right before the quarter starts  
-                - Email the instructor or department about add-code/waitlist policies  
-                - Keep backup GE/elective options ready in case you don’t get in  
-                """
-            )
-
-        st.caption("Customize this FAQ over time with UCSB-specific tips you learn.")
-
-# ---------------------------
 # PROFESSORS (RMP + dept)
 # ---------------------------
 DEPT_SITES = {
@@ -912,7 +539,7 @@ def qa_page():
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
-    "Academics": academics_page,
+    "Academics": academics_page,  # from academics.py
     "Professors": profs_page,
     "Aid & Jobs": aid_jobs_page,
     "Q&A (WIP)": qa_page,
@@ -920,7 +547,7 @@ PAGES: Dict[str, Any] = {
 
 st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
 choice = st.radio(
-    "Main navigation",  # visually styled as GOLD tabs by CSS above
+    "Main navigation",
     list(PAGES.keys()),
     horizontal=True,
     index=0,
