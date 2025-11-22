@@ -2,6 +2,36 @@
 # ------------------------------------------------------------
 # Main app file
 # ------------------------------------------------------------
+import streamlit as st
+
+# --- Custom CSS to hide UI elements ---
+st.markdown(
+    """
+<style>
+/* Hides the hamburger menu (main menu) */
+#MainMenu {
+    visibility: hidden;
+}
+
+/* Hides the "Deploy" button and GitHub link in the header */
+.stDeployButton {
+    display: none !important;
+}
+.stApp a:first-child {
+    display: none !important;
+}
+
+/* Hides the footer text */
+footer {
+    visibility: hidden;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# --- Your actual Streamlit app content goes here ---
+
 
 from __future__ import annotations
 import os
@@ -569,3 +599,4 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
+
