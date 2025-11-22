@@ -1,6 +1,6 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
-# Main app file with simple email+password login (SQLite db.sq)
+# Main app file
 # ------------------------------------------------------------
 from __future__ import annotations
 import os
@@ -20,126 +20,143 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-# 🔹 Academics tab in a separate file
+# 🔹 import Academics tab from separate file
 from academics import academics_page
 
-# ==========================
-# DB / AUTH SETUP
-# ==========================
-DB_PATH = "db.sq"  # SQLite database file; created automatically if missing
+# ------------------------------------------------------------
+# 🔐 SIMPLE EMAIL/PASSWORD AUTH USING SQLITE (db.sq)
+# ------------------------------------------------------------
+DB_PATH = "db.sq"  # SQLite file, will be created automatically
 
 
-def get_db() -> sqlite3.Connection:
+def get_db_conn() -> sqlite3.Connection:
+    """Open a connection to db.sq and ensure the users table exists."""
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db():
-    """Create tables if they don't exist."""
-    conn = get_db()
-    conn.executescript(
+    conn.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL  -- NOTE: plain text for demo only, hash in real apps
+            password TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
     )
     conn.commit()
-    conn.close()
+    return conn
 
 
 def create_user(email: str, password: str) -> tuple[bool, str]:
-    """Try to create a user; return (success, message)."""
+    """Create a new user; return (success, message)."""
+    email = (email or "").strip().lower()
+    password = (password or "").strip()
+
     if not email or not password:
         return False, "Email and password are required."
 
-    conn = get_db()
+    conn = get_db_conn()
     try:
         conn.execute(
             "INSERT INTO users (email, password) VALUES (?, ?)",
-            (email.strip(), password),
+            (email, password),  # NOTE: for real prod you should store a hash
         )
         conn.commit()
+        return True, "Account created. You can log in now."
     except sqlite3.IntegrityError:
-        conn.close()
         return False, "An account with that email already exists."
-    conn.close()
-    return True, "Account created. You can log in now."
+    finally:
+        conn.close()
 
 
-def check_credentials(email: str, password: str) -> bool:
-    """Return True if email/password match a user in the DB."""
-    conn = get_db()
-    cur = conn.execute(
-        "SELECT password FROM users WHERE email = ?",
-        (email.strip(),),
-    )
-    row = cur.fetchone()
-    conn.close()
-    if row is None:
-        return False
-    return row["password"] == password
+def authenticate_user(email: str, password: str) -> tuple[bool, str]:
+    """Check if the given email/password matches a row in the DB."""
+    email = (email or "").strip().lower()
+    password = (password or "").strip()
+
+    if not email or not password:
+        return False, "Email and password are required."
+
+    conn = get_db_conn()
+    try:
+        cur = conn.execute(
+            "SELECT id FROM users WHERE email = ? AND password = ?",
+            (email, password),
+        )
+        row = cur.fetchone()
+        if row:
+            return True, "Logged in."
+        return False, "Invalid email or password."
+    finally:
+        conn.close()
 
 
 def login_widget() -> Optional[str]:
     """
-    Show login / signup controls in the sidebar.
-    Return the logged-in email, or None if not logged in.
+    Sidebar login / signup.
+    Returns the logged-in email (str) or None if not logged in yet.
+    Uses st.session_state["user_email"].
     """
-    init_db()  # ensure tables exist
+    if "user_email" not in st.session_state:
+        st.session_state["user_email"] = None
 
-    # If already logged in, show info + logout
-    if "user_email" in st.session_state and st.session_state["user_email"]:
-        st.sidebar.markdown(f"**Logged in as:** `{st.session_state['user_email']}`")
-        if st.sidebar.button("Log out"):
-            st.session_state["user_email"] = None
-            st.experimental_rerun()
-        return st.session_state["user_email"]
+    with st.sidebar:
+        st.title("gauchoGPT")
+        st.caption("UCSB helpers — housing · classes · professors · aid · jobs")
 
-    st.sidebar.markdown("### Log in")
+        # If already logged in
+        if st.session_state["user_email"]:
+            st.markdown(f"**Logged in as:** `{st.session_state['user_email']}`")
 
-    with st.sidebar.form("login_form", clear_on_submit=False):
-        email = st.text_input("Email", key="login_email")
-        password = st.text_input("Password", type="password", key="login_password")
-        submitted = st.form_submit_button("Log in")
+            if st.button("Log out"):
+                st.session_state["user_email"] = None
+                st.experimental_rerun()
 
-    if submitted:
-        if check_credentials(email, password):
-            st.session_state["user_email"] = email.strip()
-            st.experimental_rerun()
-        else:
-            st.sidebar.error("Invalid email or password.")
+            # show a little spacer
+            st.markdown("---")
+            return st.session_state["user_email"]
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Create account")
+        # Not logged in yet: show login + signup
+        st.subheader("Log in / Sign up")
 
-    with st.sidebar.form("signup_form", clear_on_submit=True):
-        new_email = st.text_input("New email", key="signup_email")
-        new_pw = st.text_input("New password", type="password", key="signup_password")
-        signup_submit = st.form_submit_button("Sign up")
+        tab_login, tab_signup = st.tabs(["Log in", "Create account"])
 
-    if signup_submit:
-        ok, msg = create_user(new_email, new_pw)
-        if ok:
-            st.sidebar.success(msg)
-        else:
-            st.sidebar.error(msg)
+        with tab_login:
+            login_email = st.text_input("Email", key="login_email")
+            login_pw = st.text_input("Password", type="password", key="login_pw")
+            if st.button("Log in", key="login_btn"):
+                ok, msg = authenticate_user(login_email, login_pw)
+                if ok:
+                    st.session_state["user_email"] = login_email.strip().lower()
+                    st.success(msg)
+                    st.experimental_rerun()
+                else:
+                    st.error(msg)
 
-    return None
+        with tab_signup:
+            new_email = st.text_input("New email", key="signup_email")
+            new_pw = st.text_input("New password", type="password", key="signup_pw")
+            if st.button("Create account", key="signup_btn"):
+                ok, msg = create_user(new_email, new_pw)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+
+        return None
 
 
-# ==========================
-# PAGE CONFIG & STYLING
-# ==========================
+# ---------------------------
+# Page config
+# ---------------------------
 st.set_page_config(
     page_title="gauchoGPT — UCSB helper",
     page_icon="🧢",
     layout="wide",
 )
 
+# ---------------------------
+# UCSB GOLD theme + style helpers
+# ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
     [data-testid="stAppViewContainer"] { background: #ffffff; }
@@ -273,7 +290,16 @@ HIDE_STREAMLIT_STYLE = """
 
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
-# Header bar
+# 🔐 Run login widget in sidebar
+logged_in_email = login_widget()
+
+# If not logged in, stop here (main content hidden)
+if not logged_in_email:
+    st.title("UCSB Gaucho On-Line Data")
+    st.write("Log in or create an account using the controls in the sidebar.")
+    st.stop()
+
+# GOLD-style header bar (like UCSB GOLD)
 st.markdown(
     """
     <div class="gold-topbar">
@@ -284,19 +310,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar app title (login widget handles auth)
-st.sidebar.title("gauchoGPT")
-st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
-
-# 🔐 Require login via sidebar
-logged_in_email = login_widget()
-if not logged_in_email:
-    # User is not logged in; stop rendering rest of the app
-    st.stop()
-
-# ==========================
-# HOUSING
-# ==========================
+# ---------------------------
+# HOUSING — CSV-backed listings
+# ---------------------------
 HOUSING_CSV = "iv_housing_listings.csv"
 
 
@@ -308,6 +324,7 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df = pd.read_csv(HOUSING_CSV)
 
+    # Ensure expected columns exist (with safe defaults)
     for col in [
         "street", "unit", "avail_start", "avail_end",
         "price", "bedrooms", "bathrooms", "max_residents",
@@ -539,9 +556,10 @@ def housing_page():
         "Always verify current availability and pricing directly with the property manager."
     )
 
-# ==========================
-# PROFESSORS
-# ==========================
+
+# ---------------------------
+# PROFESSORS (RMP + dept)
+# ---------------------------
 DEPT_SITES = {
     "PSTAT": "https://www.pstat.ucsb.edu/people",
     "CS": "https://www.cs.ucsb.edu/people/faculty",
@@ -574,9 +592,10 @@ def profs_page():
         """
     )
 
-# ==========================
-# AID & JOBS
-# ==========================
+
+# ---------------------------
+# FINANCIAL AID & JOBS
+# ---------------------------
 AID_LINKS = {
     "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
     "UCSB Financial Aid": "https://www.finaid.ucsb.edu/",
@@ -617,9 +636,10 @@ def aid_jobs_page():
     for label, url in AID_LINKS.items():
         st.link_button(label, url)
 
-# ==========================
-# Q&A PLACEHOLDER
-# ==========================
+
+# ---------------------------
+# Q&A placeholder
+# ---------------------------
 def qa_page():
     st.header("💬 Ask gauchoGPT (placeholder)")
     st.caption("Wire this to your preferred LLM API or a local model.")
@@ -642,9 +662,10 @@ def qa_page():
             language="python",
         )
 
-# ==========================
-# NAVIGATION
-# ==========================
+
+# ---------------------------
+# GOLD-style main navigation (horizontal, like GOLD tabs)
+# ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
     "Academics": academics_page,  # from academics.py
@@ -666,7 +687,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 PAGES[choice]()
 
-st.sidebar.divider()
+st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
 **Next steps**
