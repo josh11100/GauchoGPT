@@ -93,7 +93,6 @@ def academics_page():
         "and quickly locate buildings on a map."
     )
 
-    # Load course CSV once
     courses_df = load_courses_df()
 
     # ---------------------------
@@ -131,13 +130,11 @@ def academics_page():
                 "`quarter`. Optional: `units`, `status`, `notes`."
             )
         else:
-            # Filter by selected major
             major_filtered = courses_df[courses_df["major"] == major]
 
             if major_filtered.empty:
                 st.info(f"No entries found in the CSV yet for **{major}**.")
             else:
-                # Quarters present for this major
                 available_quarters = (
                     major_filtered["quarter"]
                     .dropna()
@@ -148,7 +145,6 @@ def academics_page():
                 )
                 available_quarters = sorted(available_quarters)
 
-                # Default to Winter if present, otherwise first quarter
                 default_q = "Winter" if "Winter" in available_quarters else (
                     available_quarters[0] if available_quarters else None
                 )
@@ -163,7 +159,7 @@ def academics_page():
 
                     quarter_filtered = major_filtered[
                         major_filtered["quarter"].astype(str).str.title() == quarter
-                    ]
+                    ].reset_index(drop=True)
 
                     if quarter_filtered.empty:
                         st.info(
@@ -171,7 +167,7 @@ def academics_page():
                             "in `major_courses_by_quarter.csv` yet."
                         )
                     else:
-                        # Small summary (how many open / full / mixed)
+                        # Summary
                         open_count = (quarter_filtered["status"].str.lower() == "open").sum()
                         full_count = (quarter_filtered["status"].str.lower() == "full").sum()
                         mixed_count = (quarter_filtered["status"].str.lower() == "mixed").sum()
@@ -191,55 +187,63 @@ def academics_page():
 
                         st.markdown("---")
 
-                        # GOLD-style course blocks
-                        for _, row in quarter_filtered.iterrows():
-                            code = row.get("course_code", "").strip()
-                            title = row.get("title", "").strip()
-                            units = row.get("units", "")
-                            status = str(row.get("status", "") or "").strip()
-                            notes = str(row.get("notes", "") or "").strip()
+                        # 🔵 NEW: show cards 2 per row using columns
+                        for i in range(0, len(quarter_filtered), 2):
+                            cols = st.columns(2, gap="medium")
+                            for j in range(2):
+                                idx = i + j
+                                if idx >= len(quarter_filtered):
+                                    break
+                                row = quarter_filtered.iloc[idx]
 
-                            units_label = (
-                                f"Units: {units}"
-                                if units not in (None, "", float("nan"))
-                                else "Units: n/a"
-                            )
+                                code = str(row.get("course_code", "")).strip()
+                                title = str(row.get("title", "")).strip()
+                                units = row.get("units", "")
+                                status = str(row.get("status", "") or "").strip()
+                                notes = str(row.get("notes", "") or "").strip()
 
-                            status_lower = status.lower()
-                            if status_lower == "open":
-                                status_class = "ok"
-                                status_bg = "#ecfdf3"
-                            elif status_lower == "full":
-                                status_class = "err"
-                                status_bg = "#fef2f2"
-                            elif status_lower == "mixed":
-                                status_class = "warn"
-                                status_bg = "#fffbeb"
-                            else:
-                                status_class = "muted"
-                                status_bg = "#f3f4f6"
+                                units_label = (
+                                    f"Units: {units}"
+                                    if units not in (None, "", float("nan"))
+                                    else "Units: n/a"
+                                )
 
-                            st.markdown(
-                                f"""
-                                <div style="border-radius: 8px; overflow: hidden;
-                                            border: 1px solid #e5e7eb; margin-bottom: 12px;
-                                            box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
-                                  <div style="background:#003660; color:#ffffff;
-                                              padding:6px 12px; font-weight:600;
-                                              font-size:0.95rem;">
-                                    {code} — {title}
-                                  </div>
-                                  <div style="padding:8px 12px; font-size:0.9rem;">
-                                    <span class="pill">{units_label}</span>
-                                    <span class="pill" style="background:{status_bg};">
-                                      <span class="{status_class}">{status or "Status n/a"}</span>
-                                    </span>
-                                    {"<div class='small muted' style='margin-top:4px;'>" + notes + "</div>" if notes else ""}
-                                  </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                                status_lower = status.lower()
+                                if status_lower == "open":
+                                    status_class = "ok"
+                                    status_bg = "#ecfdf3"
+                                elif status_lower == "full":
+                                    status_class = "err"
+                                    status_bg = "#fef2f2"
+                                elif status_lower == "mixed":
+                                    status_class = "warn"
+                                    status_bg = "#fffbeb"
+                                else:
+                                    status_class = "muted"
+                                    status_bg = "#f3f4f6"
+
+                                with cols[j]:
+                                    st.markdown(
+                                        f"""
+                                        <div style="border-radius: 8px; overflow: hidden;
+                                                    border: 1px solid #e5e7eb; margin-bottom: 12px;
+                                                    box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
+                                          <div style="background:#003660; color:#ffffff;
+                                                      padding:6px 12px; font-weight:600;
+                                                      font-size:0.95rem;">
+                                            {code} — {title}
+                                          </div>
+                                          <div style="padding:8px 12px; font-size:0.9rem;">
+                                            <span class="pill">{units_label}</span>
+                                            <span class="pill" style="background:{status_bg};">
+                                              <span class="{status_class}">{status or "Status n/a"}</span>
+                                            </span>
+                                            {"<div class='small muted' style='margin-top:4px;'>" + notes + "</div>" if notes else ""}
+                                          </div>
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
                 else:
                     st.info(
                         f"No quarter information found for **{major}** in the CSV."
@@ -341,7 +345,7 @@ def academics_page():
                 """
             )
 
-        with st_expander("Class is full or waitlisted — what now?"):
+        with st.expander("Class is full or waitlisted — what now?"):
             st.markdown(
                 """
                 - Use the **GOLD waitlist** when available  
