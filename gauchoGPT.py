@@ -22,6 +22,64 @@ except Exception:
 # 🔹 import Academics tab from separate file
 from academics import academics_page
 
+# ------------------------------------------------------------
+# 🔐 AUTH HELPERS (UCSB SSO-style)
+# ------------------------------------------------------------
+def get_current_user() -> Optional[str]:
+    """
+    In production:
+      UCSB SSO / reverse proxy should set one of these env vars
+      to the logged-in user's ID / email.
+
+    In local dev:
+      You can set STREAMLIT_DEV_USER to fake a login, e.g.
+      export STREAMLIT_DEV_USER=joshuachung@ucsb.edu
+    """
+    # Try common SSO-style env vars first (your IT can confirm which one to use)
+    for key in ["UCSB_UID", "REMOTE_USER", "AUTH_USER", "UCNETID"]:
+        val = os.environ.get(key)
+        if val:
+            return val.strip()
+
+    # Dev-only fallback
+    dev_user = os.environ.get("STREAMLIT_DEV_USER")
+    if dev_user:
+        return dev_user.strip()
+
+    return None
+
+
+def require_login() -> str:
+    """
+    If no user is available from env vars, stop the app and show
+    a message. Returns the current user's identifier when logged in.
+    """
+    user = get_current_user()
+    if not user:
+        st.set_page_config(
+            page_title="gauchoGPT — login required",
+            page_icon="🧢",
+            layout="wide",
+        )
+        st.title("🔒 UCSB login required")
+        st.write(
+            """
+            This app is designed to run **behind UCSB Single Sign-On (SSO)**.
+
+            - In production: access this app via the official UCSB URL,
+              where SSO will log you in automatically.
+            - For local development: set an environment variable like:
+
+              ```bash
+              export STREAMLIT_DEV_USER=joshuachung@ucsb.edu
+              streamlit run gauchoGPT.py
+              ```
+            """
+        )
+        st.stop()
+    return user
+
+
 # ---------------------------
 # Page config
 # ---------------------------
@@ -36,7 +94,6 @@ st.set_page_config(
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
-    /* (same CSS you already had) */
     [data-testid="stAppViewContainer"] { background: #ffffff; }
     h1, h2, h3, h4 {
         color: #003660;
@@ -168,6 +225,9 @@ HIDE_STREAMLIT_STYLE = """
 
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
+# 🔐 Enforce login (SSO / dev user)
+current_user = require_login()
+
 # GOLD-style header bar (like UCSB GOLD)
 st.markdown(
     """
@@ -182,6 +242,7 @@ st.markdown(
 # Sidebar info
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
+st.sidebar.markdown(f"**Logged in as:** `{current_user}`")
 
 # ---------------------------
 # HOUSING — CSV-backed listings
@@ -317,112 +378,111 @@ def housing_page():
 
     if filtered.empty:
         st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
-        return
+    else:
+        with st.expander("📊 View table of filtered units"):
+            st.dataframe(
+                filtered[
+                    [
+                        "street",
+                        "unit",
+                        "status",
+                        "avail_start",
+                        "avail_end",
+                        "price",
+                        "bedrooms",
+                        "bathrooms",
+                        "max_residents",
+                        "pet_policy",
+                        "utilities",
+                        "price_per_person",
+                    ]
+                ],
+                use_container_width=True,
+            )
 
-    with st.expander("📊 View table of filtered units"):
-        st.dataframe(
-            filtered[
-                [
-                    "street",
-                    "unit",
-                    "status",
-                    "avail_start",
-                    "avail_end",
-                    "price",
-                    "bedrooms",
-                    "bathrooms",
-                    "max_residents",
-                    "pet_policy",
-                    "utilities",
-                    "price_per_person",
-                ]
-            ],
-            use_container_width=True,
-        )
+        for _, row in filtered.sort_values(["street", "unit"]).iterrows():
+            street = row.get("street", "")
+            unit = row.get("unit", "")
+            price = row.get("price", None)
+            bd = row.get("bedrooms", None)
+            ba = row.get("bathrooms", None)
+            max_res = row.get("max_residents", None)
+            utilities = row.get("utilities", "")
+            pet_policy = row.get("pet_policy", "")
+            pet_friendly = bool(row.get("pet_friendly", False))
+            avail_start = row.get("avail_start", "")
+            avail_end = row.get("avail_end", "")
+            status = (row.get("status") or "available").lower()
+            is_studio = bool(row.get("is_studio", False))
+            ppp = row.get("price_per_person", None)
 
-    for _, row in filtered.sort_values(["street", "unit"]).iterrows():
-        street = row.get("street", "")
-        unit = row.get("unit", "")
-        price = row.get("price", None)
-        bd = row.get("bedrooms", None)
-        ba = row.get("bathrooms", None)
-        max_res = row.get("max_residents", None)
-        utilities = row.get("utilities", "")
-        pet_policy = row.get("pet_policy", "")
-        pet_friendly = bool(row.get("pet_friendly", False))
-        avail_start = row.get("avail_start", "")
-        avail_end = row.get("avail_end", "")
-        status = (row.get("status") or "available").lower()
-        is_studio = bool(row.get("is_studio", False))
-        ppp = row.get("price_per_person", None)
-
-        if status == "available":
-            status_text = f"Available {avail_start}–{avail_end} (applications open)"
-            status_badge_class = "ok"
-        elif status == "processing":
-            status_text = "Processing applications"
-            status_badge_class = "warn"
-        elif status == "leased":
-            status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
-            status_badge_class = "muted"
-        else:
-            status_text = status
-            status_badge_class = "muted"
-
-        if is_studio:
-            bed_label = "Studio"
-        else:
-            bed_label = f"{int(bd) if not pd.isna(bd) else '?'} bed"
-
-        if not pd.isna(ba):
-            if float(ba).is_integer():
-                ba_label = f"{int(ba)} bath"
+            if status == "available":
+                status_text = f"Available {avail_start}–{avail_end} (applications open)"
+                status_badge_class = "ok"
+            elif status == "processing":
+                status_text = "Processing applications"
+                status_badge_class = "warn"
+            elif status == "leased":
+                status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
+                status_badge_class = "muted"
             else:
-                ba_label = f"{ba} bath"
-        else:
-            ba_label = "? bath"
+                status_text = status
+                status_badge_class = "muted"
 
-        residents_label = f"Up to {int(max_res)} residents" if not pd.isna(max_res) else "Max residents: ?"
+            if is_studio:
+                bed_label = "Studio"
+            else:
+                bed_label = f"{int(bd) if not pd.isna(bd) else '?'} bed"
 
-        if not pd.isna(price):
-            price_text = f"${int(price):,}/installment"
-        else:
-            price_text = "Price not listed"
+            if not pd.isna(ba):
+                if float(ba).is_integer():
+                    ba_label = f"{int(ba)} bath"
+                else:
+                    ba_label = f"{ba} bath"
+            else:
+                ba_label = "? bath"
 
-        ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
+            residents_label = f"Up to {int(max_res)} residents" if not pd.isna(max_res) else "Max residents: ?"
 
-        st.markdown("---")
-        st.markdown(f"### {street}")
-        st.markdown(f"**{unit}**")
+            if not pd.isna(price):
+                price_text = f"${int(price):,}/installment"
+            else:
+                price_text = "Price not listed"
 
-        st.markdown(
-            f"""
-            <div class='small'>
-                <span class='pill'>{bed_label}</span>
-                <span class='pill'>{ba_label}</span>
-                <span class='pill'>{residents_label}</span>
-                <span class='pill'>{pet_policy or ("Pet friendly" if pet_friendly else "No pets info")}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
 
-        st.markdown(
-            f"""
-            <div class='small'>
-                <span class='{status_badge_class}'>{status_text}</span><br/>
-                <span class='ok'>{price_text}</span>
-                {" · " + ppp_text if ppp_text else ""}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            st.markdown("---")
+            st.markdown(f"### {street}")
+            st.markdown(f"**{unit}**")
 
-        if utilities:
             st.markdown(
-                f"<div class='small muted'>Included utilities: {utilities}</div>",
+                f"""
+                <div class='small'>
+                    <span class='pill'>{bed_label}</span>
+                    <span class='pill'>{ba_label}</span>
+                    <span class='pill'>{residents_label}</span>
+                    <span class='pill'>{pet_policy or ("Pet friendly" if pet_friendly else "No pets info")}</span>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
+
+            st.markdown(
+                f"""
+                <div class='small'>
+                    <span class='{status_badge_class}'>{status_text}</span><br/>
+                    <span class='ok'>{price_text}</span>
+                    {" · " + ppp_text if ppp_text else ""}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if utilities:
+                st.markdown(
+                    f"<div class='small muted'>Included utilities: {utilities}</div>",
+                    unsafe_allow_html=True,
+                )
 
     st.markdown("---")
     st.caption(
@@ -568,5 +628,3 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
-
-
