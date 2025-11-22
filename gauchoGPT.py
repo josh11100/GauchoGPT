@@ -542,107 +542,150 @@ BUILDINGS = {
 def academics_page():
     st.header("🎓 Academics — advising, classes & map")
     st.caption(
-        "Plan your major, see classes by quarter, build a schedule, and quickly locate buildings on a map."
+        "Open your major sheet, see classes by quarter from your CSV, build a schedule, "
+        "and quickly locate buildings on a map."
     )
 
+    # Load course CSV once
     courses_df = load_courses_df()
 
-    col1, col2 = st.columns([1.2, 2])
-    with col1:
-        # Major plan
-        major = st.selectbox("Select a major", list(MAJOR_SHEETS.keys()))
-        st.link_button("Open major planning page", MAJOR_SHEETS[major])
-        st.divider()
+    # ---------------------------
+    # Major selector + main link
+    # ---------------------------
+    major = st.selectbox(
+        "Select a major",
+        list(MAJOR_SHEETS.keys()),
+        index=0,
+        key="acad_major",
+    )
 
-        # Classes by quarter
-        st.subheader("Classes available by quarter")
+    st.markdown("#### Major plan sheet")
+    st.link_button("Open major planning page", MAJOR_SHEETS[major])
+
+    st.divider()
+
+    # ---------------------------
+    # Tabs for organization
+    # ---------------------------
+    tab_classes, tab_planner, tab_map, tab_faq = st.tabs(
+        ["Classes by quarter", "My quarter planner", "Class locator map", "FAQ"]
+    )
+
+    # ===========================
+    # TAB 1: CLASSES BY QUARTER
+    # ===========================
+    with tab_classes:
+        st.subheader("Classes by quarter (from your CSV)")
 
         if courses_df is None:
             st.caption(
-                "Add a CSV named `major_courses_by_quarter.csv` in this folder to show "
-                "classes by major and quarter."
+                "To use this section, add a CSV named `major_courses_by_quarter.csv` "
+                "in this folder. Required columns: `major`, `course_code`, `title`, "
+                "`quarter`. Optional: `units`, `status`, `notes`."
             )
         else:
-            quarter = st.selectbox(
-                "Quarter",
-                ["Fall", "Winter", "Spring", "Summer"],
-                index=1,
-            )
+            # Filter by selected major
+            major_filtered = courses_df[courses_df["major"] == major]
 
-            filtered = courses_df[
-                (courses_df["major"] == major) &
-                (courses_df["quarter"] == quarter)
-            ]
-
-            if filtered.empty:
-                st.info(f"No classes listed for **{major}** in **{quarter}** in your CSV yet.")
+            if major_filtered.empty:
+                st.info(f"No entries found in the CSV yet for **{major}**.")
             else:
-                cols_to_show = ["course_code", "title", "units"]
-                if "status" in filtered.columns:
-                    cols_to_show.append("status")
-                if "notes" in filtered.columns:
-                    cols_to_show.append("notes")
+                # Get quarters actually present for this major (e.g. Winter only for your PSTAT CSV)
+                available_quarters = (
+                    major_filtered["quarter"]
+                    .dropna()
+                    .astype(str)
+                    .str.title()
+                    .unique()
+                    .tolist()
+                )
+                available_quarters = sorted(available_quarters)
 
-                st.dataframe(
-                    filtered[cols_to_show],
-                    use_container_width=True,
+                # Default to Winter if present, otherwise first quarter
+                default_q = "Winter" if "Winter" in available_quarters else (
+                    available_quarters[0] if available_quarters else None
                 )
 
-        st.subheader("Most asked questions")
+                if available_quarters and default_q is not None:
+                    quarter = st.selectbox(
+                        "Quarter",
+                        available_quarters,
+                        index=available_quarters.index(default_q),
+                        key="acad_quarter",
+                    )
 
-        with st.expander("Still lost on what classes to take?"):
-            st.markdown(
-                """
-                Talk to your department’s advisor. Using the **Open major planning page** button
-                above, you should be able to find official advising info and schedule an appointment.
-                """
-            )
+                    quarter_filtered = major_filtered[
+                        major_filtered["quarter"].astype(str).str.title() == quarter
+                    ]
 
-        with st.expander("Can’t find your specific major on this site?"):
-            st.markdown(
-                """
-                Go to the **Help / Feedback** tab in this app and send us a request so we can
-                update the major list and add the correct links.
-                """
-            )
+                    if quarter_filtered.empty:
+                        st.info(
+                            f"No classes listed for **{major}** in **{quarter}** "
+                            "in `major_courses_by_quarter.csv` yet."
+                        )
+                    else:
+                        cols_to_show = ["course_code", "title", "units"]
+                        if "status" in quarter_filtered.columns:
+                            cols_to_show.append("status")
+                        if "notes" in quarter_filtered.columns:
+                            cols_to_show.append("notes")
 
-        with st.expander("Not sure how many classes to take in a quarter?"):
-            st.markdown(
-                """
-                A common pattern is **1–2 heavier technical courses plus 1 lighter GE**, but always
-                confirm with your advisor and check your major’s sample plan for your major.
-                """
-            )
+                        st.markdown(
+                            f"Showing **{len(quarter_filtered)}** class(es) "
+                            f"for **{major}** in **{quarter}**."
+                        )
 
-        with st.expander("Class is full or waitlisted — what now?"):
-            st.markdown(
-                """
-                Use the **GOLD waitlist**, watch for enrollment changes before the quarter starts, and
-                email the instructor or department to ask about waitlist/add-code policies.
-                """
-            )
+                        st.dataframe(
+                            quarter_filtered[cols_to_show],
+                            use_container_width=True,
+                        )
+                else:
+                    st.info(
+                        f"No quarter information found for **{major}** in the CSV."
+                    )
 
-    with col2:
-        # Quarter planner
+    # ===========================
+    # TAB 2: QUARTER PLANNER
+    # ===========================
+    with tab_planner:
         st.subheader("Build your quarter (scratchpad)")
+        st.caption(
+            "This is just a planner for you. It doesn’t talk to GOLD yet — use it to play "
+            "with different course combos and unit loads."
+        )
+
+        default_rows = [
+            {"Course": "PSTAT 5A", "Units": 5, "Type": "Major prep"},
+            {"Course": "PSTAT 120A", "Units": 4, "Type": "Major"},
+            {"Course": "GE Area D", "Units": 4, "Type": "GE"},
+        ]
+
         data = st.data_editor(
-            pd.DataFrame(
-                [
-                    {"Course": "PSTAT 120A", "Units": 4, "Type": "Major"},
-                    {"Course": "MATH 6A", "Units": 4, "Type": "Support"},
-                    {"Course": "GE Area D", "Units": 4, "Type": "GE"},
-                ]
-            ),
+            pd.DataFrame(default_rows),
             use_container_width=True,
             num_rows="dynamic",
+            key="acad_planner",
         )
-        st.metric("Planned units", int(sum(data["Units"])) if not data.empty else 0)
 
-        st.divider()
+        total_units = int(sum(data["Units"])) if not data.empty and "Units" in data.columns else 0
+        st.metric("Planned units", total_units)
 
-        # 🔵 Class Locator map moved here
+        st.markdown(
+            """
+            **Tips**
+            - Many students aim for **12–16 units** per quarter.
+            - Try balancing **1–2 heavy technical** classes with **1 lighter GE**.
+            - Check your major’s sample plan and talk to an advisor if you’re unsure.
+            """
+        )
+
+    # ===========================
+    # TAB 3: CLASS LOCATOR MAP
+    # ===========================
+    with tab_map:
         st.subheader("🗺️ Quick class locator")
-        bname = st.selectbox("Choose a building", list(BUILDINGS.keys()))
+
+        bname = st.selectbox("Choose a building", list(BUILDINGS.keys()), key="acad_building")
         lat, lon = BUILDINGS[bname]
 
         if HAS_FOLIUM:
@@ -653,14 +696,61 @@ def academics_page():
             st.info("Install folium + streamlit-folium for the interactive map: pip install folium streamlit-folium")
             st.write({"building": bname, "lat": lat, "lon": lon})
 
-        st.caption("Tip: In a future version, you can auto-pin buildings from your full schedule.")
+        st.caption("Future idea: auto-pin all buildings from your full GOLD schedule.")
 
-    with st.expander("🔗 Add more official links"):
-        st.markdown(
-            """
-            Paste your department URLs here for quick access in future iterations.
-            """
-        )
+    # ===========================
+    # TAB 4: FAQ
+    # ===========================
+    with tab_faq:
+        st.subheader("Common advising questions")
+
+        with st.expander("Still lost on what classes to take?"):
+            st.markdown(
+                """
+                Use your department’s official advising resources (linked above) and schedule an
+                appointment. Bring:
+                - Your current and past schedules  
+                - A list of courses you're considering  
+                - Questions about double majors, minors, or 4-year plans  
+                """
+            )
+
+        with st.expander("Can’t find your specific major in this app?"):
+            st.markdown(
+                """
+                Right now this app only has a small set of majors.  
+                You can:
+                - Use the **UCSB Catalog** and your department’s website  
+                - Ask the app maintainer to add your major + links in a future update  
+                """
+            )
+
+        with st.expander("Not sure how many classes to take in a quarter?"):
+            st.markdown(
+                """
+                A common pattern is:
+                - **12 units** → lighter load  
+                - **16 units** → typical full load  
+                - **20+ units** → heavy load, usually needs approval  
+
+                Always check:
+                - Financial aid unit requirements  
+                - Major sample plans  
+                - How intense your technical courses are  
+                """
+            )
+
+        with st.expander("Class is full or waitlisted — what now?"):
+            st.markdown(
+                """
+                - Use the **GOLD waitlist** when available  
+                - Watch for adds/drops right before the quarter starts  
+                - Email the instructor or department about add-code/waitlist policies  
+                - Keep backup GE/elective options ready in case you don’t get in  
+                """
+            )
+
+        st.caption("Customize this FAQ over time with UCSB-specific tips you learn.")
 
 # ---------------------------
 # PROFESSORS (RMP + dept)
