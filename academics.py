@@ -1,6 +1,10 @@
 # academics.py
+# ------------------------------------------------------------
+# Academics tab: advising links + classes + planner + map + FAQ
+# ------------------------------------------------------------
 from __future__ import annotations
 import os
+import sqlite3
 from typing import Optional
 
 import streamlit as st
@@ -13,13 +17,14 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-# ---------------------------
-# ACADEMICS — classes by quarter (CSV)
-# ---------------------------
-COURSES_CSV = "major_courses_by_quarter.csv"  # CSV for classes by major & quarter
+# CSV file (your PSTAT Winter CSV lives here)
+COURSES_CSV = "major_courses_by_quarter.csv"
+
+# Optional SQLite DB (created from db.sql + seed script)
+DB_PATH = "academics.db"
 
 # ---------------------------
-# ACADEMICS (advising quick links)
+# ACADEMICS — major plan links
 # ---------------------------
 MAJOR_SHEETS = {
     "Statistics & Data Science": "https://www.pstat.ucsb.edu/undergraduate/majors-minors/stats-and-data-science-major",
@@ -34,9 +39,7 @@ MAJOR_SHEETS = {
     "English": "https://www.english.ucsb.edu/undergraduate/for-majors/requirements/ ",
 }
 
-# ---------------------------
 # CLASS LOCATION (map)
-# ---------------------------
 BUILDINGS = {
     "Phelps Hall (PHELP)": (34.41239, -119.84862),
     "Harold Frank Hall (HFH)": (34.41434, -119.84246),
@@ -47,17 +50,51 @@ BUILDINGS = {
 }
 
 
-def load_courses_df() -> Optional[pd.DataFrame]:
+def _load_courses_from_db() -> Optional[pd.DataFrame]:
+    """Try to load courses from SQLite DB if it exists."""
+    if not os.path.exists(DB_PATH):
+        return None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+            SELECT
+                c.major,
+                c.course_code,
+                c.title,
+                o.quarter,
+                c.units,
+                o.status,
+                o.notes
+            FROM courses c
+            JOIN offerings o ON c.id = o.course_id
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        # Normalize columns to match CSV style
+        df.columns = [c.strip().lower() for c in df.columns]
+        return df
+    except Exception as e:
+        st.warning(f"Couldn't load from DB ({e}). Falling back to CSV.")
+        return None
+
+
+def _load_courses_from_csv() -> Optional[pd.DataFrame]:
+    """Load the CSV with class offerings by major and quarter."""
     if not os.path.exists(COURSES_CSV):
+        st.caption(
+            "To see classes by quarter, add a CSV named `major_courses_by_quarter.csv` "
+            "in this folder. For now, only PSTAT Winter is in your CSV."
+        )
         return None
 
     df = pd.read_csv(COURSES_CSV)
-
     df.columns = [c.strip().lower() for c in df.columns]
 
+    # Basic required columns
     for col in ["major", "course_code", "title", "quarter"]:
         if col not in df.columns:
-            st.error(f"'{COURSES_CSV}' is missing required column: '{col}'")
+            st.error(f"`{COURSES_CSV}` is missing required column: `{col}`")
             return None
 
     if "units" not in df.columns:
@@ -68,19 +105,34 @@ def load_courses_df() -> Optional[pd.DataFrame]:
         df["notes"] = ""
 
     df["quarter"] = df["quarter"].astype(str).str.strip().str.title()
+
     return df
+
+
+def load_courses_df() -> Optional[pd.DataFrame]:
+    """
+    Main loader used by the Academics UI.
+    1) Try DB (academics.db)
+    2) If not available, fall back to CSV
+    """
+    db_df = _load_courses_from_db()
+    if db_df is not None and not db_df.empty:
+        return db_df
+    return _load_courses_from_csv()
 
 
 def academics_page():
     st.header("🎓 Academics — advising, classes & map")
     st.caption(
-        "Open your major sheet, see classes by quarter from your CSV, build a schedule, "
+        "Open your major sheet, see classes by quarter (from your CSV/DB), build a schedule, "
         "and quickly locate buildings on a map."
     )
 
     courses_df = load_courses_df()
 
-    # Major selector + link
+    # ---------------------------
+    # Major selector + main link
+    # ---------------------------
     major = st.selectbox(
         "Select a major",
         list(MAJOR_SHEETS.keys()),
@@ -93,25 +145,26 @@ def academics_page():
 
     st.divider()
 
+    # ---------------------------
+    # Tabs for organization
+    # ---------------------------
     tab_classes, tab_planner, tab_map, tab_faq = st.tabs(
         ["Classes by quarter", "My quarter planner", "Class locator map", "FAQ"]
     )
 
-    # ========= TAB 1: CLASSES =========
+    # ===========================
+    # TAB 1: CLASSES BY QUARTER
+    # ===========================
     with tab_classes:
-        st.subheader("Classes by quarter (from your CSV)")
+        st.subheader("Classes by quarter")
 
-        if courses_df is None:
-            st.caption(
-                "To use this section, add a CSV named `major_courses_by_quarter.csv` "
-                "in this folder. Required columns: `major`, `course_code`, `title`, "
-                "`quarter`. Optional: `units`, `status`, `notes`."
-            )
+        if courses_df is None or courses_df.empty:
+            st.info("No course data found yet. Add your CSV or set up the DB.")
         else:
             major_filtered = courses_df[courses_df["major"] == major]
 
             if major_filtered.empty:
-                st.info(f"No entries found in the CSV yet for **{major}**.")
+                st.info(f"No entries found yet for **{major}**.")
             else:
                 available_quarters = (
                     major_filtered["quarter"]
@@ -137,12 +190,11 @@ def academics_page():
 
                     quarter_filtered = major_filtered[
                         major_filtered["quarter"].astype(str).str.title() == quarter
-                    ].reset_index(drop=True)
+                    ]
 
                     if quarter_filtered.empty:
                         st.info(
-                            f"No classes listed for **{major}** in **{quarter}** "
-                            "in `major_courses_by_quarter.csv` yet."
+                            f"No classes listed for **{major}** in **{quarter}** yet."
                         )
                     else:
                         open_count = (quarter_filtered["status"].str.lower() == "open").sum()
@@ -164,53 +216,52 @@ def academics_page():
 
                         st.markdown("---")
 
-                        # 🔵 3 CARDS PER ROW
-                        for i in range(0, len(quarter_filtered), 3):
-                            cols = st.columns(3, gap="medium")
-                            for j in range(3):
-                                idx = i + j
-                                if idx >= len(quarter_filtered):
-                                    break
-                                row = quarter_filtered.iloc[idx]
+                        # Render courses in rows of 3 cards
+                        rows = [
+                            quarter_filtered.iloc[i : i + 3]
+                            for i in range(0, len(quarter_filtered), 3)
+                        ]
 
-                                code = str(row.get("course_code", "")).strip()
-                                title = str(row.get("title", "")).strip()
-                                units = row.get("units", "")
-                                status = str(row.get("status", "") or "").strip()
-                                notes = str(row.get("notes", "") or "").strip()
+                        for row_df in rows:
+                            cols = st.columns(len(row_df))
+                            for (idx, course_row), col in zip(row_df.iterrows(), cols):
+                                with col:
+                                    code = str(course_row.get("course_code", "")).strip()
+                                    title = str(course_row.get("title", "")).strip()
+                                    units = course_row.get("units", "")
+                                    status = str(course_row.get("status", "") or "").strip()
+                                    notes = str(course_row.get("notes", "") or "").strip()
 
-                                units_label = (
-                                    f"Units: {units}"
-                                    if units not in (None, "", float("nan"))
-                                    else "Units: n/a"
-                                )
+                                    if units not in (None, "", float("nan")):
+                                        units_label = f"{units} units"
+                                    else:
+                                        units_label = "Units: n/a"
 
-                                status_lower = status.lower()
-                                if status_lower == "open":
-                                    status_class = "ok"
-                                    status_bg = "#ecfdf3"
-                                elif status_lower == "full":
-                                    status_class = "err"
-                                    status_bg = "#fef2f2"
-                                elif status_lower == "mixed":
-                                    status_class = "warn"
-                                    status_bg = "#fffbeb"
-                                else:
-                                    status_class = "muted"
-                                    status_bg = "#f3f4f6"
+                                    status_lower = status.lower()
+                                    if status_lower == "open":
+                                        status_class = "ok"
+                                        status_bg = "#ecfdf3"
+                                    elif status_lower == "full":
+                                        status_class = "err"
+                                        status_bg = "#fef2f2"
+                                    elif status_lower == "mixed":
+                                        status_class = "warn"
+                                        status_bg = "#fffbeb"
+                                    else:
+                                        status_class = "muted"
+                                        status_bg = "#f3f4f6"
 
-                                with cols[j]:
                                     st.markdown(
                                         f"""
-                                        <div style="border-radius: 8px; overflow: hidden;
+                                        <div style="border-radius: 10px; overflow: hidden;
                                                     border: 1px solid #e5e7eb; margin-bottom: 12px;
-                                                    box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
+                                                    box-shadow: 0 1px 2px rgba(15,23,42,0.06);">
                                           <div style="background:#003660; color:#ffffff;
-                                                      padding:6px 12px; font-weight:600;
-                                                      font-size:0.95rem;">
+                                                      padding:6px 10px; font-weight:600;
+                                                      font-size:0.9rem;">
                                             {code} — {title}
                                           </div>
-                                          <div style="padding:8px 12px; font-size:0.9rem;">
+                                          <div style="padding:8px 10px; font-size:0.85rem;">
                                             <span class="pill">{units_label}</span>
                                             <span class="pill" style="background:{status_bg};">
                                               <span class="{status_class}">{status or "Status n/a"}</span>
@@ -221,17 +272,17 @@ def academics_page():
                                         """,
                                         unsafe_allow_html=True,
                                     )
-                else:
-                    st.info(
-                        f"No quarter information found for **{major}** in the CSV."
-                    )
 
-    # ========= TAB 2: PLANNER =========
+                else:
+                    st.info(f"No quarter information found yet for **{major}**.")
+
+    # ===========================
+    # TAB 2: QUARTER PLANNER
+    # ===========================
     with tab_planner:
         st.subheader("Build your quarter (scratchpad)")
         st.caption(
-            "This is just a planner for you. It doesn’t talk to GOLD yet — use it to play "
-            "with different course combos and unit loads."
+            "This is just for planning. It doesn’t talk to GOLD yet — use it to play with different course combos."
         )
 
         default_rows = [
@@ -259,7 +310,9 @@ def academics_page():
             """
         )
 
-    # ========= TAB 3: MAP =========
+    # ===========================
+    # TAB 3: CLASS LOCATOR MAP
+    # ===========================
     with tab_map:
         st.subheader("🗺️ Quick class locator")
 
@@ -276,7 +329,9 @@ def academics_page():
 
         st.caption("Future idea: auto-pin all buildings from your full GOLD schedule.")
 
-    # ========= TAB 4: FAQ =========
+    # ===========================
+    # TAB 4: FAQ
+    # ===========================
     with tab_faq:
         st.subheader("Common advising questions")
 
@@ -288,16 +343,6 @@ def academics_page():
                 - Your current and past schedules  
                 - A list of courses you're considering  
                 - Questions about double majors, minors, or 4-year plans  
-                """
-            )
-
-        with st.expander("Can’t find your specific major in this app?"):
-            st.markdown(
-                """
-                Right now this app only has a small set of majors.  
-                You can:
-                - Use the **UCSB Catalog** and your department’s website  
-                - Ask the app maintainer to add your major + links in a future update  
                 """
             )
 
