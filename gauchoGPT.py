@@ -2,11 +2,8 @@
 # ------------------------------------------------------------
 # Main app file
 # ------------------------------------------------------------
-
 from __future__ import annotations
 import os
-import math
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
@@ -37,7 +34,6 @@ st.set_page_config(
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
-    /* (same CSS you already had) */
     [data-testid="stAppViewContainer"] { background: #ffffff; }
     h1, h2, h3, h4 {
         color: #003660;
@@ -198,7 +194,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df = pd.read_csv(HOUSING_CSV)
 
-    # Ensure expected columns exist (with safe defaults)
     for col in [
         "street", "unit", "avail_start", "avail_end",
         "price", "bedrooms", "bathrooms", "max_residents",
@@ -276,7 +271,6 @@ def housing_page():
         )
 
     filtered = df.copy()
-
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
     if bedroom_choice == "Studio":
