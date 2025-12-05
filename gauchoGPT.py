@@ -1,7 +1,7 @@
 # gauchoGPT — Streamlit GOLD-themed MVP
 # ------------------------------------------------------------
 # Main app file
-# ------------------------------------------------------------
+# ------------------------------------------------------------ 
 
 from __future__ import annotations
 import os
@@ -569,3 +569,4 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
+
