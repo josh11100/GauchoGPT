@@ -2,7 +2,6 @@
 # ------------------------------------------------------------
 # Main app file
 # ------------------------------------------------------------ 
-
 from __future__ import annotations
 import os
 import math
@@ -569,4 +568,5 @@ st.sidebar.markdown(
 - Connect an LLM for the Q&A tab.
 """
 )
+
 
