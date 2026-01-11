@@ -1,3 +1,4 @@
+# academics_enhanced.py
 from __future__ import annotations
 import os
 import sqlite3
@@ -68,7 +69,6 @@ def load_courses_from_db(major: str, quarter: str = "Winter 2025") -> Optional[p
     try:
         conn = sqlite3.connect(DB_PATH)
         
-        # Get departments for this major
         departments = MAJOR_DEPARTMENTS.get(major, [])
         if not departments:
             return None
@@ -158,7 +158,6 @@ def display_course_card(row, col_container):
 
         units_label = f"{units} units" if units not in (None, "", float("nan")) else "Units: n/a"
 
-        # Status styling
         status_lower = status.lower()
         if status_lower == "open":
             status_class = "ok"
@@ -175,7 +174,6 @@ def display_course_card(row, col_container):
 
         enrollment_info = f"{enrolled}/{capacity}" if capacity > 0 else "N/A"
         
-        # Build info text
         info_parts = []
         if instructor:
             info_parts.append(f"👨‍🏫 {instructor}")
@@ -219,7 +217,6 @@ def academics_page():
         "View live course data from UCSB, build your schedule, and locate buildings."
     )
 
-    # Check data source
     has_db = os.path.exists(DB_PATH)
     has_csv = os.path.exists(COURSES_CSV)
     
@@ -230,7 +227,6 @@ def academics_page():
     else:
         st.warning("⚠️ No course data found. Run the scraper or add CSV file.")
 
-    # Major selector
     major = st.selectbox(
         "Select a major",
         list(MAJOR_SHEETS.keys()),
@@ -247,7 +243,6 @@ def academics_page():
         ["Classes by quarter", "Course search", "My planner", "Building map", "Analytics"]
     )
 
-    # ========= TAB 1: CLASSES BY QUARTER =========
     with tab_classes:
         st.subheader("Classes by quarter")
 
@@ -257,13 +252,11 @@ def academics_page():
             key="acad_quarter",
         )
 
-        # Try database first, fall back to CSV
         courses_df = load_courses_from_db(major, quarter) if has_db else load_courses_df()
 
         if courses_df is None or courses_df.empty:
             st.info(f"No course data available for **{major}** in **{quarter}**.")
         else:
-            # Filter by major if using CSV
             if 'major' in courses_df.columns:
                 courses_df = courses_df[courses_df['major'] == major]
             
@@ -275,7 +268,6 @@ def academics_page():
             else:
                 stats = get_course_stats(courses_df)
                 
-                # Display stats
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("Total courses", stats['total'])
                 col2.metric("🟢 Open", stats['open'])
@@ -284,7 +276,6 @@ def academics_page():
 
                 st.markdown("---")
 
-                # Filter options
                 with st.expander("🔍 Filter options"):
                     filter_col1, filter_col2 = st.columns(2)
                     with filter_col1:
@@ -300,11 +291,9 @@ def academics_page():
                             if instructor_filter:
                                 courses_df = courses_df[courses_df['instructor'].isin(instructor_filter)]
                 
-                # Apply status filter
                 if status_filter:
                     courses_df = courses_df[courses_df['status'].str.title().isin(status_filter)]
 
-                # Display courses in cards (3 per row)
                 for i in range(0, len(courses_df), 3):
                     cols = st.columns(3, gap="medium")
                     for j in range(3):
@@ -314,7 +303,6 @@ def academics_page():
                         row = courses_df.iloc[idx]
                         display_course_card(row, cols[j])
 
-    # ========= TAB 2: COURSE SEARCH =========
     with tab_search:
         st.subheader("🔍 Search all courses")
         
@@ -344,14 +332,12 @@ def academics_page():
             else:
                 st.info("No courses found matching your search.")
 
-    # ========= TAB 3: PLANNER =========
     with tab_planner:
         st.subheader("📝 Build your quarter schedule")
         
         if 'planned_courses' not in st.session_state:
             st.session_state.planned_courses = []
 
-        # Add course
         with st.form("add_course_form"):
             col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
@@ -359,7 +345,7 @@ def academics_page():
             with col2:
                 new_units = st.number_input("Units", min_value=1, max_value=8, value=4)
             with col3:
-                st.write("")  # Spacing
+                st.write("")
                 st.write("")
                 add_btn = st.form_submit_button("Add course", use_container_width=True)
             
@@ -370,7 +356,6 @@ def academics_page():
                 })
                 st.rerun()
 
-        # Display planned courses
         if st.session_state.planned_courses:
             df_plan = pd.DataFrame(st.session_state.planned_courses)
             st.dataframe(df_plan, use_container_width=True, hide_index=True)
@@ -393,7 +378,6 @@ def academics_page():
         else:
             st.info("No courses planned yet. Add courses above!")
 
-    # ========= TAB 4: MAP =========
     with tab_map:
         st.subheader("🗺️ Campus building locator")
 
@@ -408,14 +392,12 @@ def academics_page():
             st.info("Install folium for interactive map: `pip install folium streamlit-folium`")
             st.json({"building": bname, "latitude": lat, "longitude": lon})
 
-    # ========= TAB 5: ANALYTICS =========
     with tab_analytics:
         st.subheader("📊 Course analytics")
         
         if has_db:
             conn = sqlite3.connect(DB_PATH)
             
-            # Most popular courses by enrollment
             popular_query = '''
                 SELECT course_code, enrolled, capacity, 
                        ROUND(CAST(enrolled AS FLOAT) / capacity * 100, 1) as fill_rate
@@ -430,7 +412,6 @@ def academics_page():
                 st.markdown("#### Most in-demand courses")
                 st.dataframe(popular_df, use_container_width=True, hide_index=True)
             
-            # Average class size by department
             dept_query = '''
                 SELECT c.dept, AVG(o.enrolled) as avg_enrollment, COUNT(*) as num_courses
                 FROM courses c
@@ -447,6 +428,3 @@ def academics_page():
             conn.close()
         else:
             st.info("Run the scraper to see analytics!")
-
-
-if __name__ == "__main__":
