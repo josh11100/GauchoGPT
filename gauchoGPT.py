@@ -1,4 +1,4 @@
-# gauchoGPT — Streamlit GOLD-themed MVP
+# gauchoGPT — Streamlit GOLD-themed MVP with SQL integration
 # ------------------------------------------------------------
 # Main app file
 # ------------------------------------------------------------ 
@@ -19,8 +19,15 @@ try:
 except Exception:
     HAS_FOLIUM = False
 
-# 🔹 import Academics tab from separate file
+# 🔹 Import Academics tab from separate file
 from academics import academics_page
+
+# 🔹 NEW: Import scraper (optional - for admin panel)
+try:
+    from ucsb_course_scraper import UCSBCourseScraper
+    HAS_SCRAPER = True
+except ImportError:
+    HAS_SCRAPER = False
 
 # ---------------------------
 # Page config
@@ -36,7 +43,6 @@ st.set_page_config(
 # ---------------------------
 HIDE_STREAMLIT_STYLE = """
 <style>
-    /* (same CSS you already had) */
     [data-testid="stAppViewContainer"] { background: #ffffff; }
     h1, h2, h3, h4 {
         color: #003660;
@@ -168,7 +174,7 @@ HIDE_STREAMLIT_STYLE = """
 
 st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
 
-# GOLD-style header bar (like UCSB GOLD)
+# GOLD-style header bar
 st.markdown(
     """
     <div class="gold-topbar">
@@ -179,9 +185,72 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar info
+# ---------------------------
+# SIDEBAR with Admin Panel
+# ---------------------------
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
+
+# Database status indicator
+st.sidebar.divider()
+st.sidebar.markdown("### 📊 Data Status")
+
+db_exists = os.path.exists("gauchoGPT.db")
+csv_exists = os.path.exists("major_courses_by_quarter.csv")
+
+if db_exists:
+    st.sidebar.success("✅ Course database active")
+    
+    # Show last update time
+    import sqlite3
+    from datetime import datetime
+    try:
+        conn = sqlite3.connect("gauchoGPT.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(scraped_at) FROM course_offerings")
+        last_update = cursor.fetchone()[0]
+        conn.close()
+        if last_update:
+            st.sidebar.caption(f"Last scraped: {last_update[:10]}")
+    except:
+        pass
+elif csv_exists:
+    st.sidebar.info("📄 Using CSV data")
+else:
+    st.sidebar.warning("⚠️ No course data found")
+
+# Admin panel for scraping
+if HAS_SCRAPER:
+    st.sidebar.divider()
+    st.sidebar.markdown("### 🔧 Admin Tools")
+    
+    with st.sidebar.expander("Update course data"):
+        st.caption("Scrape latest courses from UCSB")
+        
+        if st.button("🔄 Run Scraper", type="primary", use_container_width=True):
+            with st.spinner("Scraping UCSB courses..."):
+                try:
+                    scraper = UCSBCourseScraper()
+                    
+                    # Create DB if doesn't exist
+                    scraper.create_database_schema()
+                    
+                    # Scrape courses
+                    courses_df = scraper.scrape_all_departments()
+                    
+                    if not courses_df.empty:
+                        scraper.save_to_database(courses_df)
+                        st.success(f"✅ Scraped {len(courses_df)} courses!")
+                        st.rerun()
+                    else:
+                        st.error("No courses found. Check scraper configuration.")
+                        
+                except Exception as e:
+                    st.error(f"Scraper error: {e}")
+        
+        st.caption("⚠️ Note: Scraper needs proper UCSB page selectors configured")
+
+st.sidebar.divider()
 
 # ---------------------------
 # HOUSING — CSV-backed listings
@@ -197,7 +266,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df = pd.read_csv(HOUSING_CSV)
 
-    # Ensure expected columns exist (with safe defaults)
     for col in [
         "street", "unit", "avail_start", "avail_end",
         "price", "bedrooms", "bathrooms", "max_residents",
@@ -215,7 +283,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
     df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
-
     df["pet_friendly"] = df["pet_friendly"].astype(bool)
 
     df["price_per_person"] = df.apply(
@@ -275,7 +342,6 @@ def housing_page():
         )
 
     filtered = df.copy()
-
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
     if bedroom_choice == "Studio":
@@ -534,11 +600,11 @@ def qa_page():
         )
 
 # ---------------------------
-# GOLD-style main navigation (horizontal, like GOLD tabs)
+# GOLD-style main navigation
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
-    "Academics": academics_page,  # from academics.py
+    "Academics": academics_page,
     "Professors": profs_page,
     "Aid & Jobs": aid_jobs_page,
     "Q&A (WIP)": qa_page,
@@ -557,17 +623,13 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 PAGES[choice]()
 
-st.sidebar.divider()
 st.sidebar.markdown(
     """
 **Next steps**
-- Keep the housing CSV updated as availability changes.
-- Add non-available units with correct `status` (processing / leased).
-- Expand to more property managers or data sources.
-- Fill in `major_courses_by_quarter.csv` for classes by major & quarter.
-- Connect an LLM for the Q&A tab.
+- Keep CSV data updated
+- Configure scraper selectors for UCSB pages
+- Add RateMyProfessor scraper
+- Connect LLM for Q&A tab
+- Build ML recommendation system
 """
 )
-
-
-
