@@ -1,6 +1,4 @@
-
-
-# gauchoGPT — Streamlit “Apple-clean” UI refresh (centered, card-based)
+# gauchoGPT — Streamlit “Apple-clean” UI refresh + Modern box-tab navigation
 # ------------------------------------------------------------
 from __future__ import annotations
 
@@ -48,12 +46,10 @@ APPLE_STYLE = """
   --text: #1d1d1f;
   --muted: #6e6e73;
   --line: rgba(0,0,0,0.08);
-  --shadow: 0 10px 30px rgba(0,0,0,0.08);
   --shadow2: 0 2px 10px rgba(0,0,0,0.06);
   --radius: 18px;
-  --radius2: 14px;
 
-  /* UCSB accents but in a “clean” way */
+  /* UCSB accents but subtle */
   --navy: #003660;
   --gold: #FDB515;
 
@@ -185,7 +181,7 @@ h3{ font-size: 1.15rem; font-weight: 750; }
 .status-warn{ color: #a35a00; font-weight: 800; }
 .status-muted{ color: var(--muted); font-weight: 650; }
 
-/* Buttons */
+/* Buttons (global) */
 .stButton > button{
   background: var(--accent);
   border: 1px solid rgba(0,0,0,0.0);
@@ -222,6 +218,28 @@ h3{ font-size: 1.15rem; font-weight: 750; }
 }
 [data-testid="stSidebar"] .block-container{
   padding-top: 1.15rem;
+}
+
+/* --- Modern tab chips (button-based) --- */
+.nav-chip button{
+  width: 100%;
+  background: rgba(0,0,0,0.04) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  border-radius: 999px !important;
+  padding: 0.55rem 0.9rem !important;
+  font-weight: 850 !important;
+  box-shadow: none !important;
+}
+.nav-chip button:hover{
+  background: rgba(0,0,0,0.06) !important;
+}
+
+/* Active chip */
+.nav-chip-active button{
+  background: rgba(0,113,227,0.12) !important;
+  border-color: rgba(0,113,227,0.22) !important;
+  color: #0b3a6a !important;
 }
 </style>
 """
@@ -344,7 +362,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
 
-    # Be careful: if column is missing, it was created as None -> cast safely
     if "pet_friendly" in df.columns:
         df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
     else:
@@ -612,7 +629,7 @@ def profs_page():
     st.markdown(
         """
         <div class="card">
-          <div style="font-weight:850; font-size:1.05rem;">What to look for</div>
+          <div style="font-weight:900; font-size:1.05rem;">What to look for</div>
           <div class="small-muted" style="margin-top:8px;">
             • Syllabi from prior quarters (grading, workload, curve)<br/>
             • RMP comments: focus on <strong>recent</strong> terms & specific anecdotes<br/>
@@ -723,33 +740,41 @@ import os
 
 
 # ---------------------------
-# Main navigation (clean, in a card)
+# Modern “word-box” navigation (symmetric)
 # ---------------------------
 PAGES: Dict[str, Any] = {
-    "Housing (IV)": housing_page,
-    "Academics": academics_page,
-    "Professors": profs_page,
-    "Aid & Jobs": aid_jobs_page,
-    "Q&A (WIP)": qa_page,
+    "🏠 Housing": housing_page,
+    "📚 Academics": academics_page,
+    "👩‍🏫 Professors": profs_page,
+    "💸 Aid & Jobs": aid_jobs_page,
+    "💬 Q&A": qa_page,
 }
 
-st.markdown('<div class="card">', unsafe_allow_html=True)
-choice = st.radio(
-    "Main navigation",
-    list(PAGES.keys()),
-    horizontal=True,
-    index=0,
-    key="main_nav",
-    label_visibility="collapsed",
-)
-st.markdown("</div>", unsafe_allow_html=True)
+# Default nav state
+if "main_nav" not in st.session_state:
+    st.session_state["main_nav"] = "🏠 Housing"
 
+st.markdown('<div class="card">', unsafe_allow_html=True)
+
+labels = list(PAGES.keys())
+cols = st.columns(len(labels))
+
+for i, label in enumerate(labels):
+    is_active = (st.session_state["main_nav"] == label)
+    cls = "nav-chip-active" if is_active else "nav-chip"
+    with cols[i]:
+        st.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
+        if st.button(label, key=f"nav_{label}", use_container_width=True):
+            st.session_state["main_nav"] = label
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
 st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 
 # Render selected page
-PAGES[choice]()
-
-# Move “Next steps” into a clean main-page card (keeps Apple vibe)
+PAGES[st.session_state["main_nav"]]()
+# Optional: if you want the sidebar “Next steps” only, delete this card.
 st.markdown(
     """
     <div class="section-gap"></div>
@@ -767,7 +792,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar can stay minimal; keep a short reminder there if you want
 st.sidebar.markdown(
     """
 **Next steps (quick)**
@@ -776,4 +800,3 @@ st.sidebar.markdown(
 - Connect LLM for Q&A
 """
 )
-
