@@ -1,20 +1,17 @@
-# gauchoGPT — Streamlit GOLD-themed MVP with SQL integration
+# gauchoGPT — Streamlit “Apple-clean” UI refresh (centered, card-based)
 # ------------------------------------------------------------
-# Main app file
-# ------------------------------------------------------------ 
 from __future__ import annotations
+
 import os
-import math
-from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 import streamlit as st
 import pandas as pd
 from urllib.parse import quote_plus
 
 try:
-    from streamlit_folium import st_folium
-    import folium
+    from streamlit_folium import st_folium  # noqa: F401
+    import folium  # noqa: F401
     HAS_FOLIUM = True
 except Exception:
     HAS_FOLIUM = False
@@ -22,7 +19,7 @@ except Exception:
 # 🔹 Import Academics tab from separate file
 from academics import academics_page
 
-# 🔹 NEW: Import scraper (optional - for admin panel)
+# 🔹 Optional: Import scraper (for admin panel)
 try:
     from ucsb_course_scraper import UCSBCourseScraper
     HAS_SCRAPER = True
@@ -39,159 +36,233 @@ st.set_page_config(
 )
 
 # ---------------------------
-# UCSB GOLD theme + style helpers
+# “Apple-like” clean UI theme
 # ---------------------------
-HIDE_STREAMLIT_STYLE = """
+APPLE_STYLE = """
 <style>
-    [data-testid="stAppViewContainer"] { background: #ffffff; }
-    h1, h2, h3, h4 {
-        color: #003660;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    body, p, label, span, div {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .gold-topbar {
-        width: 100%;
-        background: #003660;
-        color: #ffffff;
-        padding: 10px 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 0.95rem;
-        box-shadow: 0 2px 4px rgba(15,23,42,0.25);
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-    }
-    .gold-topbar-left {
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-    .gold-topbar-right { font-weight: 500; opacity: 0.9; }
-    .gold-nav-wrapper {
-        width: 100%;
-        background: #FDB515;
-        padding: 4px 24px 0 24px;
-        box-shadow: 0 1px 2px rgba(15,23,42,0.15);
-        margin-bottom: 12px;
-    }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] { gap: 0; }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label {
-        cursor: pointer;
-        padding: 10px 24px;
-        border-radius: 0;
-        border: none;
-        background: transparent;
-        color: #374151;
-        margin-right: 16px;
-    }
-    [data-testid="stHorizontalBlock"] [role="radio"] > div:first-child {
-        display: none !important;
-    }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] {
-        background: transparent;
-        border-bottom: 3px solid #ffffff;
-        box-shadow: none;
-    }
-    [data-testid="stHorizontalBlock"] [role="radio"][aria-checked="true"] p {
-        color: #003660;
-        font-weight: 700;
-    }
-    [data-testid="stHorizontalBlock"] [role="radiogroup"] label p {
-        font-size: 0.9rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 0;
-    }
-    [data-testid="stSidebar"] {
-        background: #f3f4f6;
-        border-right: 1px solid #d1d5db;
-        min-width: 260px;
-        max-width: 280px;
-    }
-    [data-testid="stSidebar"] .block-container {
-        padding-top: 1.25rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    [data-testid="stSidebar"] * { color: #111827 !important; }
-    .stButton > button, .st-link-button {
-        border-radius: 9999px;
-        border-width: 0;
-        padding: 0.35rem 1.05rem;
-        font-weight: 600;
-        background: #003660;
-        color: #ffffff;
-        box-shadow: 0 3px 8px rgba(15,23,42,0.25);
-    }
-    .stButton > button:hover, .st-link-button:hover {
-        background: #FDB515;
-        color: #111827;
-    }
-    .stDataFrame thead tr th {
-        background-color: #003660 !important;
-        color: #f9fafb !important;
-    }
-    .small {font-size: 0.85rem; color: #4b5563;}
-    .muted {color:#6b7280;}
-    .pill {
-        display:inline-block;
-        padding:4px 10px;
-        border-radius:9999px;
-        background:#e5e7eb;
-        color:#003660;
-        font-weight:600;
-        margin-right:8px;
-    }
-    .tag  {
-        display:inline-block;
-        padding:2px 8px;
-        border-radius:9999px;
-        background:#eff6ff;
-        color:#1d4ed8;
-        font-weight:500;
-        margin-right:6px
-    }
-    .code {
-        font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        background:#0b1021;
-        color:#d1e1ff;
-        padding:3px 6px;
-        border-radius:6px
-    }
-    .ok   {color:#059669; font-weight:600}
-    .warn {color:#b45309; font-weight:600}
-    .err  {color:#b91c1c; font-weight:700}
-    [data-testid="stExpander"] > summary:hover {
-        color: #003660;
-    }
+:root{
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --line: rgba(0,0,0,0.08);
+  --shadow: 0 10px 30px rgba(0,0,0,0.08);
+  --shadow2: 0 2px 10px rgba(0,0,0,0.06);
+  --radius: 18px;
+  --radius2: 14px;
+
+  /* UCSB accents but in a “clean” way */
+  --navy: #003660;
+  --gold: #FDB515;
+
+  /* Primary action (Apple-ish) */
+  --accent: #0071e3;
+  --accent2: #0a84ff;
+}
+
+/* App background + typography */
+[data-testid="stAppViewContainer"]{
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+               "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+}
+
+/* Center the content like a page */
+.block-container{
+  padding-top: 1.25rem;
+  max-width: 1120px;
+}
+
+/* Headings */
+h1,h2,h3,h4{
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+h1{ font-size: 2.35rem; font-weight: 850; }
+h2{ font-size: 1.55rem; font-weight: 800; }
+h3{ font-size: 1.15rem; font-weight: 750; }
+
+/* Subtle helper text */
+.small-muted{ color: var(--muted); font-size: 0.92rem; line-height: 1.35; }
+
+/* Minimal sticky topbar */
+.apple-topbar{
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  background: rgba(245,245,247,0.82);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+}
+.apple-topbar-inner{
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+.brand .dot{
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(0,113,227,0.12);
+}
+.brand small{
+  color: var(--muted);
+  font-weight: 650;
+}
+.topbar-right{
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 0.92rem;
+}
+
+/* Card system */
+.card{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow2);
+  padding: 16px 18px;
+}
+.card-tight{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow2);
+  padding: 12px 14px;
+}
+.section-gap{ height: 14px; }
+
+/* Pills */
+.pills{ display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0 6px; }
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
+  color: var(--text);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+.pill-blue{
+  background: rgba(0,113,227,0.10);
+  border-color: rgba(0,113,227,0.18);
+  color: #0b3a6a;
+}
+
+/* Listing typography */
+.listing-title{
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px 0;
+}
+.listing-sub{
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-bottom: 8px;
+}
+
+/* Status */
+.status-ok{ color: #1f7a1f; font-weight: 800; }
+.status-warn{ color: #a35a00; font-weight: 800; }
+.status-muted{ color: var(--muted); font-weight: 650; }
+
+/* Buttons */
+.stButton > button{
+  background: var(--accent);
+  border: 1px solid rgba(0,0,0,0.0);
+  color: white;
+  border-radius: 999px;
+  padding: 0.55rem 1.05rem;
+  font-weight: 800;
+  box-shadow: 0 10px 25px rgba(0,113,227,0.18);
+}
+.stButton > button:hover{
+  background: var(--accent2);
+}
+
+/* Inputs */
+[data-baseweb="input"] input,
+[data-baseweb="textarea"] textarea{
+  border-radius: 12px !important;
+}
+[data-baseweb="select"] > div{
+  border-radius: 12px !important;
+}
+
+/* Dataframe header */
+.stDataFrame thead tr th{
+  background-color: rgba(0,0,0,0.06) !important;
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+/* Sidebar: subtle */
+[data-testid="stSidebar"]{
+  background: rgba(245,245,247,0.92);
+  border-right: 1px solid var(--line);
+}
+[data-testid="stSidebar"] .block-container{
+  padding-top: 1.15rem;
+}
 </style>
 """
+st.markdown(APPLE_STYLE, unsafe_allow_html=True)
 
-st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
-
-# GOLD-style header bar
+# ---------------------------
+# Topbar + Hero
+# ---------------------------
 st.markdown(
     """
-    <div class="gold-topbar">
-        <div class="gold-topbar-left">UCSB Gaucho On-Line Data</div>
-        <div class="gold-topbar-right">gauchoGPT · UCSB Student Helper</div>
+    <div class="apple-topbar">
+      <div class="apple-topbar-inner">
+        <div class="brand">
+          <span class="dot"></span>
+          <span>gauchoGPT</span>
+          <small>UCSB Student Helper</small>
+        </div>
+        <div class="topbar-right">Housing • Academics • Professors • Aid & Jobs</div>
+      </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <div class="card" style="padding:22px 22px;">
+      <div style="font-size:2.2rem; font-weight:900; letter-spacing:-0.03em;">UCSB tools, in one place.</div>
+      <div class="small-muted" style="margin-top:6px;">
+        Find housing, plan classes, check professors, and navigate aid & jobs — faster.
+      </div>
+    </div>
+    <div class="section-gap"></div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ---------------------------
-# SIDEBAR with Admin Panel
+# Sidebar (clean)
 # ---------------------------
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
 
-# Database status indicator
 st.sidebar.divider()
 st.sidebar.markdown("### 📊 Data Status")
 
@@ -200,10 +271,8 @@ csv_exists = os.path.exists("major_courses_by_quarter.csv")
 
 if db_exists:
     st.sidebar.success("✅ Course database active")
-    
-    # Show last update time
+
     import sqlite3
-    from datetime import datetime
     try:
         conn = sqlite3.connect("gauchoGPT.db")
         cursor = conn.cursor()
@@ -211,44 +280,33 @@ if db_exists:
         last_update = cursor.fetchone()[0]
         conn.close()
         if last_update:
-            st.sidebar.caption(f"Last scraped: {last_update[:10]}")
-    except:
+            st.sidebar.caption(f"Last scraped: {str(last_update)[:10]}")
+    except Exception:
         pass
 elif csv_exists:
     st.sidebar.info("📄 Using CSV data")
 else:
     st.sidebar.warning("⚠️ No course data found")
 
-# Admin panel for scraping
 if HAS_SCRAPER:
     st.sidebar.divider()
     st.sidebar.markdown("### 🔧 Admin Tools")
-    
     with st.sidebar.expander("Update course data"):
         st.caption("Scrape latest courses from UCSB")
-        
         if st.button("🔄 Run Scraper", type="primary", use_container_width=True):
             with st.spinner("Scraping UCSB courses..."):
                 try:
                     scraper = UCSBCourseScraper()
-                    
-                    # Create DB if doesn't exist
                     scraper.create_database_schema()
-                    
-                    # Scrape courses
                     courses_df = scraper.scrape_all_departments()
-                    
                     if not courses_df.empty:
                         scraper.save_to_database(courses_df)
                         st.success(f"✅ Scraped {len(courses_df)} courses!")
                         st.rerun()
                     else:
                         st.error("No courses found. Check scraper configuration.")
-                        
                 except Exception as e:
                     st.error(f"Scraper error: {e}")
-        
-        st.caption("⚠️ Note: Scraper needs proper UCSB page selectors configured")
 
 st.sidebar.divider()
 
@@ -283,7 +341,12 @@ def load_housing_df() -> Optional[pd.DataFrame]:
     df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
-    df["pet_friendly"] = df["pet_friendly"].astype(bool)
+
+    # Be careful: if column is missing, it was created as None -> cast safely
+    if "pet_friendly" in df.columns:
+        df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
+    else:
+        df["pet_friendly"] = False
 
     df["price_per_person"] = df.apply(
         lambda row: row["price"] / row["max_residents"]
@@ -296,10 +359,15 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
 
 def housing_page():
-    st.header("🏠 Isla Vista Housing (CSV snapshot)")
-    st.caption(
-        "Snapshot of selected Isla Vista units from ivproperties.com for the 2026–27 lease term. "
-        "Filters below help you find fits by price, bedrooms, status, and pet policy."
+    st.markdown(
+        """
+        <div class="card">
+          <div style="font-size:1.35rem; font-weight:900; letter-spacing:-0.02em;">Isla Vista Housing</div>
+          <div class="small-muted">CSV snapshot from ivproperties.com (2026–27). Filter and browse cleanly.</div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
     )
 
     df = load_housing_df()
@@ -307,7 +375,9 @@ def housing_page():
         st.warning("No housing data found in the CSV.")
         return
 
-    col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.5, 1.5, 1.5])
+    # Filters card
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.3, 1.3, 1.3])
 
     with col_f1:
         max_price_val = int(df["price"].max()) if df["price"].notna().any() else 10000
@@ -329,18 +399,21 @@ def housing_page():
 
     with col_f3:
         status_choice = st.selectbox(
-            "Status filter",
+            "Status",
             ["Available only", "All statuses", "Processing only", "Leased only"],
             index=0,
         )
 
     with col_f4:
         pet_choice = st.selectbox(
-            "Pet policy",
+            "Pets",
             ["Any", "Only pet-friendly", "No pets allowed"],
             index=0,
         )
 
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Apply filters
     filtered = df.copy()
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
@@ -355,12 +428,12 @@ def housing_page():
         except ValueError:
             pass
 
-    status_choice_lower = status_choice.lower()
-    if status_choice_lower.startswith("available"):
+    s = status_choice.lower()
+    if s.startswith("available"):
         filtered = filtered[filtered["status"] == "available"]
-    elif status_choice_lower.startswith("processing"):
+    elif s.startswith("processing"):
         filtered = filtered[filtered["status"] == "processing"]
-    elif status_choice_lower.startswith("leased"):
+    elif s.startswith("leased"):
         filtered = filtered[filtered["status"] == "leased"]
 
     if pet_choice == "Only pet-friendly":
@@ -373,10 +446,14 @@ def housing_page():
 
     st.markdown(
         f"""
-        <div class='small muted'>
-        Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
-        • Price ≤ <span class='pill'>${price_limit:,}</span>
+        <div class="section-gap"></div>
+        <div class="card-tight">
+          <div class="small-muted">
+            Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
+            • Price ≤ <span class="pill pill-blue">${price_limit:,}</span>
+          </div>
         </div>
+        <div class="section-gap"></div>
         """,
         unsafe_allow_html=True,
     )
@@ -385,7 +462,7 @@ def housing_page():
         st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
         return
 
-    with st.expander("📊 View table of filtered units"):
+    with st.expander("View table of filtered units"):
         st.dataframe(
             filtered[
                 [
@@ -406,6 +483,7 @@ def housing_page():
             use_container_width=True,
         )
 
+    # Listing cards
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
         street = row.get("street", "")
         unit = row.get("unit", "")
@@ -424,77 +502,70 @@ def housing_page():
 
         if status == "available":
             status_text = f"Available {avail_start}–{avail_end} (applications open)"
-            status_badge_class = "ok"
+            status_class = "status-ok"
         elif status == "processing":
             status_text = "Processing applications"
-            status_badge_class = "warn"
+            status_class = "status-warn"
         elif status == "leased":
             status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
-            status_badge_class = "muted"
+            status_class = "status-muted"
         else:
             status_text = status
-            status_badge_class = "muted"
+            status_class = "status-muted"
 
-        if is_studio:
-            bed_label = "Studio"
-        else:
-            bed_label = f"{int(bd) if not pd.isna(bd) else '?'} bed"
+        bed_label = "Studio" if is_studio else f"{int(bd) if pd.notna(bd) else '?'} bed"
 
-        if not pd.isna(ba):
-            if float(ba).is_integer():
-                ba_label = f"{int(ba)} bath"
-            else:
-                ba_label = f"{ba} bath"
+        if pd.notna(ba):
+            ba_label = f"{int(ba)} bath" if float(ba).is_integer() else f"{ba} bath"
         else:
             ba_label = "? bath"
 
-        residents_label = f"Up to {int(max_res)} residents" if not pd.isna(max_res) else "Max residents: ?"
+        residents_label = f"Up to {int(max_res)} residents" if pd.notna(max_res) else "Max residents: ?"
 
-        if not pd.isna(price):
-            price_text = f"${int(price):,}/installment"
-        else:
-            price_text = "Price not listed"
-
+        price_text = f"${int(price):,}/installment" if pd.notna(price) else "Price not listed"
         ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
 
-        st.markdown("---")
-        st.markdown(f"### {street}")
-        st.markdown(f"**{unit}**")
+        pet_label = pet_policy or ("Pet friendly" if pet_friendly else "No pets info")
 
         st.markdown(
             f"""
-            <div class='small'>
-                <span class='pill'>{bed_label}</span>
-                <span class='pill'>{ba_label}</span>
-                <span class='pill'>{residents_label}</span>
-                <span class='pill'>{pet_policy or ("Pet friendly" if pet_friendly else "No pets info")}</span>
+            <div class="card">
+              <div class="listing-title">{street}</div>
+              <div class="listing-sub">{unit}</div>
+
+              <div class="pills">
+                <span class="pill">{bed_label}</span>
+                <span class="pill">{ba_label}</span>
+                <span class="pill">{residents_label}</span>
+                <span class="pill">{pet_label}</span>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="{status_class}">{status_text}</div>
+                <div style="margin-top:6px; font-weight:900; font-size:1.05rem;">
+                  {price_text}
+                  <span style="color:#6e6e73; font-weight:650;">{(" · " + ppp_text) if ppp_text else ""}</span>
+                </div>
+                {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown(
-            f"""
-            <div class='small'>
-                <span class='{status_badge_class}'>{status_text}</span><br/>
-                <span class='ok'>{price_text}</span>
-                {" · " + ppp_text if ppp_text else ""}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if utilities:
-            st.markdown(
-                f"<div class='small muted'>Included utilities: {utilities}</div>",
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-    st.caption(
-        "Note: This is a manually curated CSV snapshot based on ivproperties.com. "
-        "Always verify current availability and pricing directly with the property manager."
+    st.markdown(
+        """
+        <div class="section-gap"></div>
+        <div class="card-tight">
+          <div class="small-muted">
+            Note: This is a manually curated CSV snapshot based on ivproperties.com.
+            Always verify current availability and pricing directly with the property manager.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+
 
 # ---------------------------
 # PROFESSORS (RMP + dept)
@@ -507,29 +578,50 @@ DEPT_SITES = {
 
 
 def profs_page():
-    st.header("👩‍🏫 Professors & course intel")
+    st.markdown(
+        """
+        <div class="card">
+          <div style="font-size:1.35rem; font-weight:900; letter-spacing:-0.02em;">Professors & course intel</div>
+          <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
     dept = st.selectbox("Department site", list(DEPT_SITES.keys()))
     col1, col2 = st.columns(2)
+
     with col1:
         if name:
             q = quote_plus(f"{name} site:ratemyprofessors.com UCSB")
             st.link_button("Search on RateMyProfessors", f"https://www.google.com/search?q={q}")
         else:
             st.caption("Enter a name to generate a quick RMP search link.")
+
     with col2:
         st.link_button("Open dept faculty page", DEPT_SITES[dept])
 
-    st.divider()
-    st.subheader("What to look for")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     st.markdown(
         """
-        - Syllabi from prior quarters (grading, workload, curve)
-        - RMP comments: look for **recent** terms and specific anecdotes
-        - Department Discord/Slack/Reddit for up-to-date tips
-        - Talk to students who recently took the course
-        """
+        <div class="card">
+          <div style="font-weight:850; font-size:1.05rem;">What to look for</div>
+          <div class="small-muted" style="margin-top:8px;">
+            • Syllabi from prior quarters (grading, workload, curve)<br/>
+            • RMP comments: focus on <strong>recent</strong> terms & specific anecdotes<br/>
+            • Department Discord/Slack/Reddit for up-to-date tips<br/>
+            • Ask students who took the course last quarter
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+
 
 # ---------------------------
 # FINANCIAL AID & JOBS
@@ -543,15 +635,25 @@ AID_LINKS = {
 
 
 def aid_jobs_page():
-    st.header("💸 Financial aid, work-study & jobs")
+    st.markdown(
+        """
+        <div class="card">
+          <div style="font-size:1.35rem; font-weight:900; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
+          <div class="small-muted">Short explainers + quick links.</div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     with st.expander("What is financial aid?"):
         st.write(
             """
             Financial aid reduces your cost of attendance via grants, scholarships, work-study, and loans.
-            File the **FAFSA** (or CADAA if applicable) as early as possible each year. Watch priority deadlines.
+            File the FAFSA (or CADAA if applicable) early each year and watch priority deadlines.
             """
         )
+
     with st.expander("What is work-study?"):
         st.write(
             """
@@ -559,48 +661,67 @@ def aid_jobs_page():
             Your award caps how much you can earn under work-study each year.
             """
         )
+
     with st.expander("How to get a job quickly"):
         st.markdown(
             """
-            1) Set up your **Handshake** profile, upload resume.
-            2) Filter by *On-campus* or *Work-study eligible*.
-            3) Apply to 5–10 postings and follow up.
-            4) Visit department offices; ask about openings.
-            5) Consider research assistant roles if you have relevant skills.
+            1) Set up your Handshake profile + upload a resume  
+            2) Filter by On-campus or Work-study eligible  
+            3) Apply to 5–10 postings and follow up  
+            4) Ask department offices about openings  
+            5) Consider research assistant roles if you have relevant skills
             """
         )
 
-    st.subheader("Quick links")
-    for label, url in AID_LINKS.items():
-        st.link_button(label, url)
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("#### Quick links")
+    cols = st.columns(4)
+    items = list(AID_LINKS.items())
+    for i, (label, url) in enumerate(items):
+        with cols[i % 4]:
+            st.link_button(label, url)
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
 # ---------------------------
 # Q&A placeholder
 # ---------------------------
 def qa_page():
-    st.header("💬 Ask gauchoGPT (placeholder)")
-    st.caption("Wire this to your preferred LLM API or a local model.")
+    st.markdown(
+        """
+        <div class="card">
+          <div style="font-size:1.35rem; font-weight:900; letter-spacing:-0.02em;">Ask gauchoGPT</div>
+          <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
         st.info("Connect to an API (e.g., OpenAI, Anthropic) or a local model here.")
         st.code(
             """
-            import os
-            # Example sketch (pseudocode):
-            # from openai import OpenAI
-            # client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            # resp = client.chat.completions.create(
-            #     model="gpt-4o-mini",
-            #     messages=[{"role": "user", "content": prompt}],
-            # )
-            # st.write(resp.choices[0].message.content)
+import os
+# Example sketch (pseudocode):
+# from openai import OpenAI
+# client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+# resp = client.chat.completions.create(
+#     model="gpt-4o-mini",
+#     messages=[{"role": "user", "content": prompt}],
+# )
+# st.write(resp.choices[0].message.content)
             """,
             language="python",
         )
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
 # ---------------------------
-# GOLD-style main navigation
+# Main navigation (clean, in a card)
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "Housing (IV)": housing_page,
@@ -610,7 +731,7 @@ PAGES: Dict[str, Any] = {
     "Q&A (WIP)": qa_page,
 }
 
-st.markdown('<div class="gold-nav-wrapper">', unsafe_allow_html=True)
+st.markdown('<div class="card">', unsafe_allow_html=True)
 choice = st.radio(
     "Main navigation",
     list(PAGES.keys()),
@@ -621,15 +742,35 @@ choice = st.radio(
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
+st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+
+# Render selected page
 PAGES[choice]()
 
+# Move “Next steps” into a clean main-page card (keeps Apple vibe)
+st.markdown(
+    """
+    <div class="section-gap"></div>
+    <div class="card">
+      <div style="font-weight:900; font-size:1.05rem;">Next steps</div>
+      <div class="small-muted" style="margin-top:8px;">
+        • Keep housing CSV updated as availability changes<br/>
+        • Add non-available units with correct status (processing / leased)<br/>
+        • Expand to more property managers or data sources<br/>
+        • Fill in <code>major_courses_by_quarter.csv</code> for classes by major & quarter<br/>
+        • Connect an LLM for the Q&A tab
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Sidebar can stay minimal; keep a short reminder there if you want
 st.sidebar.markdown(
     """
-**Next steps**
-- Keep CSV data updated
-- Configure scraper selectors for UCSB pages
-- Add RateMyProfessor scraper
-- Connect LLM for Q&A tab
-- Build ML recommendation system
+**Next steps (quick)**
+- Keep CSV updated
+- Configure scraper selectors
+- Connect LLM for Q&A
 """
 )
