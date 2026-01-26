@@ -67,9 +67,12 @@ APPLE_STYLE = """
                "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
+/* Give top whitespace for sticky bar, and widen content a bit */
 .block-container{
-  padding-top: 3.25rem; 
-  max-width: 1200px;     
+  padding-top: 3.25rem;
+  max-width: 1200px;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 /* Headings */
@@ -194,15 +197,6 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   background: var(--accent2);
 }
 
-/* Inputs */
-[data-baseweb="input"] input,
-[data-baseweb="textarea"] textarea{
-  border-radius: 12px !important;
-}
-[data-baseweb="select"] > div{
-  border-radius: 12px !important;
-}
-
 /* Dataframe header */
 .stDataFrame thead tr th{
   background-color: rgba(0,0,0,0.06) !important;
@@ -239,6 +233,61 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   background: rgba(0,113,227,0.12) !important;
   border-color: rgba(0,113,227,0.22) !important;
   color: #0b3a6a !important;
+}
+
+/* ================================
+   INPUT FIELD SURFACE IMPROVEMENTS
+================================ */
+
+/* Base input surface (select/input/textarea) */
+[data-baseweb="select"] > div,
+[data-baseweb="input"] input,
+[data-baseweb="textarea"] textarea {
+  background: #fafafa !important;
+  border: 1px solid rgba(0,0,0,0.14) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+  padding-top: 2px !important;
+}
+
+/* Hover */
+[data-baseweb="select"] > div:hover,
+[data-baseweb="input"] input:hover,
+[data-baseweb="textarea"] textarea:hover {
+  border-color: rgba(0,0,0,0.25) !important;
+}
+
+/* Focus (clicked) */
+[data-baseweb="select"] > div:focus-within,
+[data-baseweb="input"] input:focus,
+[data-baseweb="textarea"] textarea:focus {
+  border-color: #0a84ff !important;
+  box-shadow: 0 0 0 3px rgba(10,132,255,0.18) !important;
+  background: #ffffff !important;
+}
+
+/* Slider track */
+[data-testid="stSlider"] > div > div {
+  background: rgba(0,0,0,0.10) !important;
+  border-radius: 999px;
+}
+
+/* Slider handle */
+[data-testid="stSlider"] [role="slider"] {
+  background: #0a84ff !important;
+  border: 2px solid white !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* Dropdown arrow */
+[data-baseweb="select"] svg {
+  fill: #6e6e73 !important;
+}
+
+/* Labels slightly darker */
+label {
+  color: #1d1d1f !important;
+  font-weight: 650;
 }
 </style>
 """
@@ -773,7 +822,7 @@ st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 
 # Render selected page
 PAGES[st.session_state["main_nav"]]()
-# Optional: if you want the sidebar “Next steps” only, delete this card.
+
 st.markdown(
     """
     <div class="section-gap"></div>
@@ -799,5 +848,3 @@ st.sidebar.markdown(
 - Connect LLM for Q&A
 """
 )
-
-
