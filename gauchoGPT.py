@@ -67,10 +67,9 @@ APPLE_STYLE = """
                "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
-/* Center the content like a page */
 .block-container{
-  padding-top: 1.25rem;
-  max-width: 1120px;
+  padding-top: 3.25rem; 
+  max-width: 1200px;     
 }
 
 /* Headings */
@@ -800,4 +799,5 @@ st.sidebar.markdown(
 - Connect LLM for Q&A
 """
 )
+
 
