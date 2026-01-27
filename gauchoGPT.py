@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import base64
+import textwrap
 from typing import Dict, Any, Optional
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from urllib.parse import quote_plus
 
@@ -34,8 +36,18 @@ st.set_page_config(
 # Helpers
 # ---------------------------
 def render_html(html: str) -> None:
-    """Render HTML reliably (prevents Streamlit from printing raw tags)."""
-    st.markdown(html, unsafe_allow_html=True)
+    """
+    Render HTML reliably.
+    Streamlit treats leading indentation as code blocks, so we dedent + strip.
+    """
+    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+
+def render_card_html(html: str, height: int = 280) -> None:
+    """
+    Extra-robust HTML renderer for complex blocks (listing cards).
+    Uses components.html so Streamlit never prints raw tags.
+    """
+    components.html(textwrap.dedent(html).strip(), height=height, scrolling=False)
 
 def img_to_data_uri(path: str) -> Optional[str]:
     if not os.path.exists(path):
@@ -315,20 +327,18 @@ render_html(UCSB_STYLE)
 # ---------------------------
 # Topbar
 # ---------------------------
-render_html(
-    """
-    <div class="topbar">
-      <div class="topbar-inner">
-        <div class="brand">
-          <span class="brand-dot"></span>
-          <span>gauchoGPT</span>
-          <small>UCSB Student Helper</small>
-        </div>
-        <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>
-      </div>
+render_html("""
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>gauchoGPT</span>
+      <small>UCSB Student Helper</small>
     </div>
-    """
-)
+    <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>
+  </div>
+</div>
+""")
 
 
 # ---------------------------
@@ -392,7 +402,7 @@ if HAS_SCRAPER:
 
 st.sidebar.divider()
 st.sidebar.markdown(
-    """
+"""
 **Next steps (quick)**
 - Keep CSV updated
 - Configure scraper selectors
@@ -441,69 +451,59 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
 
 def home_page():
-    render_html(
-        """
-        <div class="hero">
-          <div class="hero-title">UCSB tools, in one place.</div>
-          <div class="hero-sub">
-            Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.
-          </div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html("""
+    <div class="hero">
+      <div class="hero-title">UCSB tools, in one place.</div>
+      <div class="hero-sub">
+        Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.
+      </div>
+    </div>
+    <div class="section-gap"></div>
+    """)
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        render_html(
-            """
-            <div class="card-soft">
-              <div style="font-weight:950;">🏠 Housing</div>
-              <div class="small-muted" style="margin-top:8px;">Browse IV listings with clean filters + optional photos.</div>
-            </div>
-            """
-        )
+        render_html("""
+        <div class="card-soft">
+          <div style="font-weight:950;">🏠 Housing</div>
+          <div class="small-muted" style="margin-top:8px;">Browse IV listings with clean filters + optional photos.</div>
+        </div>
+        """)
         if st.button("Open Housing", use_container_width=True):
             st.session_state["main_nav"] = "🏠 Housing"
             st.rerun()
 
     with c2:
-        render_html(
-            """
-            <div class="card-soft">
-              <div style="font-weight:950;">📚 Academics</div>
-              <div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, explore resources.</div>
-            </div>
-            """
-        )
+        render_html("""
+        <div class="card-soft">
+          <div style="font-weight:950;">📚 Academics</div>
+          <div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, explore resources.</div>
+        </div>
+        """)
         if st.button("Open Academics", use_container_width=True):
             st.session_state["main_nav"] = "📚 Academics"
             st.rerun()
 
     with c3:
-        render_html(
-            """
-            <div class="card-soft">
-              <div style="font-weight:950;">👩‍🏫 Professors</div>
-              <div class="small-muted" style="margin-top:8px;">Fast RMP searches + department pages.</div>
-            </div>
-            """
-        )
+        render_html("""
+        <div class="card-soft">
+          <div style="font-weight:950;">👩‍🏫 Professors</div>
+          <div class="small-muted" style="margin-top:8px;">Fast RMP searches + department pages.</div>
+        </div>
+        """)
         if st.button("Open Professors", use_container_width=True):
             st.session_state["main_nav"] = "👩‍🏫 Professors"
             st.rerun()
 
 
 def housing_page():
-    render_html(
-        """
-        <div class="card-soft">
-          <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
-          <div class="small-muted">CSV snapshot from ivproperties.com (2026–27). Photos show if <code>image_url</code> exists.</div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html("""
+    <div class="card-soft">
+      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
+      <div class="small-muted">CSV snapshot from ivproperties.com (2026–27). Photos show if <code>image_url</code> exists.</div>
+    </div>
+    <div class="section-gap"></div>
+    """)
 
     df = load_housing_df()
     if df is None or df.empty:
@@ -516,7 +516,13 @@ def housing_page():
     with col_f1:
         max_price_val = int(df["price"].max()) if df["price"].notna().any() else 10000
         min_price_val = int(df["price"].min()) if df["price"].notna().any() else 0
-        price_limit = st.slider("Max monthly installment", min_value=min_price_val, max_value=max_price_val, value=max_price_val, step=100)
+        price_limit = st.slider(
+            "Max monthly installment",
+            min_value=min_price_val,
+            max_value=max_price_val,
+            value=max_price_val,
+            step=100
+        )
 
     with col_f2:
         bedroom_choice = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4", "5+"], index=0)
@@ -526,6 +532,7 @@ def housing_page():
 
     with col_f4:
         pet_choice = st.selectbox("Pets", ["Any", "Only pet-friendly", "No pets allowed"], index=0)
+
     render_html("</div>")
 
     filtered = df.copy()
@@ -542,7 +549,7 @@ def housing_page():
         except ValueError:
             pass
 
-    s = status_choice.lower()
+    s = status_choice.lower().strip()
     status_lower = filtered["status"].fillna("").astype(str).str.lower().str.strip()
     if s.startswith("available"):
         filtered = filtered[status_lower == "available"]
@@ -559,18 +566,16 @@ def housing_page():
             | (filtered["pet_policy"].fillna("").astype(str).str.contains("No pets", case=False))
         ]
 
-    render_html(
-        f"""
-        <div class="section-gap"></div>
-        <div class="card-soft">
-          <div class="small-muted">
-            Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
-            • <span class="pill pill-blue">Price ≤ ${price_limit:,}</span>
-          </div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html(f"""
+    <div class="section-gap"></div>
+    <div class="card-soft">
+      <div class="small-muted">
+        Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
+        • <span class="pill pill-blue">Price ≤ ${price_limit:,}</span>
+      </div>
+    </div>
+    <div class="section-gap"></div>
+    """)
 
     if filtered.empty:
         st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
@@ -591,10 +596,11 @@ def housing_page():
             use_container_width=True,
         )
 
-    # ✅ KEY FIX: All listing cards render via render_html(...), never plain st.markdown(...)
+    # Listing cards (rendered with components.html so they never print as raw tags)
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
         street = safe_str(row.get("street")).strip()
         unit = safe_str(row.get("unit")).strip()
+
         status = safe_str(row.get("status")).lower().strip()
 
         price = row.get("price")
@@ -611,9 +617,12 @@ def housing_page():
         image_url = safe_str(row.get("image_url")).strip()
         listing_url = safe_str(row.get("listing_url")).strip()
 
-        # Status styling
+        # Status styling (fixed for missing dates)
         if status == "available":
-            status_text = f"Available {avail_start}–{avail_end} (applications open)".strip()
+            if avail_start and avail_end:
+                status_text = f"Available {avail_start}–{avail_end} (applications open)"
+            else:
+                status_text = "Available (applications open)"
             status_class = "status-ok"
         elif status == "processing":
             status_text = "Processing applications"
@@ -652,38 +661,40 @@ def housing_page():
         if listing_url:
             link_chip = f'<a href="{listing_url}" target="_blank" style="text-decoration:none;"><span class="pill pill-gold">View listing ↗</span></a>'
 
-        render_html(
-            f"""
-            <div class="card">
-              <div class="listing-wrap">
-                <div class="thumb">{img_html}</div>
+        # Adjust height if you have long utilities strings
+        card_height = 265 if not utilities else 285
 
-                <div>
-                  <div class="listing-title">{street}</div>
-                  <div class="listing-sub">{unit}</div>
+        render_card_html(f"""
+        <div class="card">
+          <div class="listing-wrap">
+            <div class="thumb">{img_html}</div>
 
-                  <div class="pills">
-                    <span class="pill">{bed_label}</span>
-                    <span class="pill">{ba_label}</span>
-                    <span class="pill">{residents_label}</span>
-                    <span class="pill pill-gold">{pet_label}</span>
-                    {link_chip}
-                  </div>
+            <div>
+              <div class="listing-title">{street}</div>
+              <div class="listing-sub">{unit}</div>
 
-                  <div style="margin-top:10px;">
-                    <div class="{status_class}">{status_text}</div>
-                    <div class="price-row">
-                      {price_text}
-                      <span class="small-muted" style="font-weight:750;">{(" · " + ppp_text) if ppp_text else ""}</span>
-                    </div>
-                    {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
-                  </div>
+              <div class="pills">
+                <span class="pill">{bed_label}</span>
+                <span class="pill">{ba_label}</span>
+                <span class="pill">{residents_label}</span>
+                <span class="pill pill-gold">{pet_label}</span>
+                {link_chip}
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="{status_class}">{status_text}</div>
+                <div class="price-row">
+                  {price_text}
+                  <span class="small-muted" style="font-weight:750;">{(" · " + ppp_text) if ppp_text else ""}</span>
                 </div>
+                {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
               </div>
             </div>
-            <div class="section-gap"></div>
-            """
-        )
+          </div>
+        </div>
+        """, height=card_height)
+
+        render_html('<div class="section-gap"></div>')
 
 
 # ---------------------------
@@ -696,15 +707,13 @@ DEPT_SITES = {
 }
 
 def profs_page():
-    render_html(
-        """
-        <div class="card-soft">
-          <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Professors & course intel</div>
-          <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html("""
+    <div class="card-soft">
+      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Professors & course intel</div>
+      <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
+    </div>
+    <div class="section-gap"></div>
+    """)
 
     render_html('<div class="card">')
     name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
@@ -732,31 +741,25 @@ AID_LINKS = {
 }
 
 def aid_jobs_page():
-    render_html(
-        """
-        <div class="card-soft">
-          <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
-          <div class="small-muted">Short explainers + quick links.</div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html("""
+    <div class="card-soft">
+      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
+      <div class="small-muted">Short explainers + quick links.</div>
+    </div>
+    <div class="section-gap"></div>
+    """)
 
     with st.expander("What is financial aid?"):
-        st.write(
-            """
-            Financial aid reduces your cost of attendance via grants, scholarships, work-study, and loans.
-            File the FAFSA (or CADAA if applicable) early each year and watch priority deadlines.
-            """
-        )
+        st.write("""
+        Financial aid reduces your cost of attendance via grants, scholarships, work-study, and loans.
+        File the FAFSA (or CADAA if applicable) early each year and watch priority deadlines.
+        """)
 
     with st.expander("What is work-study?"):
-        st.write(
-            """
-            Work-study is a need-based program that lets you earn money via part-time jobs on or near campus.
-            Your award caps how much you can earn under work-study each year.
-            """
-        )
+        st.write("""
+        Work-study is a need-based program that lets you earn money via part-time jobs on or near campus.
+        Your award caps how much you can earn under work-study each year.
+        """)
 
     render_html('<div class="section-gap"></div>')
     render_html('<div class="card">')
@@ -772,15 +775,13 @@ def aid_jobs_page():
 # Q&A
 # ---------------------------
 def qa_page():
-    render_html(
-        """
-        <div class="card-soft">
-          <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Ask gauchoGPT</div>
-          <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
-        </div>
-        <div class="section-gap"></div>
-        """
-    )
+    render_html("""
+    <div class="card-soft">
+      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Ask gauchoGPT</div>
+      <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
+    </div>
+    <div class="section-gap"></div>
+    """)
     render_html('<div class="card">')
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
