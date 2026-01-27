@@ -1,5 +1,5 @@
-# gauchoGPT — Streamlit “Apple-clean” UI + Hamburger Drawer + Home/About + Optional UCSB background
-# -----------------------------------------------------------------------------------------------
+# gauchoGPT — Streamlit “Apple-clean” UI + LEFT sidebar hamburger + Sidebar nav + Optional UCSB background
+# ------------------------------------------------------------------------------------------------------
 from __future__ import annotations
 
 import os
@@ -53,7 +53,21 @@ BG_URI = (
 )
 
 # ---------------------------
-# UI Theme + Drawer styles
+# Session state defaults
+# ---------------------------
+NAV_LABELS = ["🏁 Home", "🏠 Housing", "📚 Academics", "👩‍🏫 Professors", "💸 Aid & Jobs", "💬 Q&A"]
+
+if "main_nav" not in st.session_state:
+    st.session_state["main_nav"] = "🏁 Home"
+
+# THIS is the hamburger behavior you asked for:
+# When closed -> show Admin + Status only
+# When open   -> show Admin + Status + Navigation buttons (Home/Housing/...)
+if "sidebar_nav_open" not in st.session_state:
+    st.session_state["sidebar_nav_open"] = False
+
+# ---------------------------
+# Styles
 # ---------------------------
 APPLE_STYLE = f"""
 <style>
@@ -63,7 +77,6 @@ APPLE_STYLE = f"""
   --text: #1d1d1f;
   --muted: #6e6e73;
   --line: rgba(0,0,0,0.10);
-  --shadow2: 0 10px 30px rgba(0,0,0,0.10);
   --shadow1: 0 2px 10px rgba(0,0,0,0.06);
   --radius: 18px;
 
@@ -80,33 +93,29 @@ APPLE_STYLE = f"""
 }}
 
 {f"""
-/* Full-page background image (optional) */
+/* Optional full-page background image */
 [data-testid="stAppViewContainer"]::before {{
   content: "";
   position: fixed;
   inset: 0;
   background:
     radial-gradient(1000px 450px at 20% 10%, rgba(255,255,255,0.60), rgba(255,255,255,0.0)),
-    linear-gradient(rgba(245,245,247,0.85), rgba(245,245,247,0.92)),
+    linear-gradient(rgba(245,245,247,0.86), rgba(245,245,247,0.94)),
     url("{BG_URI}");
   background-size: cover;
   background-position: center;
-  filter: saturate(1.05) contrast(1.02);
   z-index: 0;
 }}
 """ if BG_URI else ""}
 
-/* Keep Streamlit content above background */
 [data-testid="stAppViewContainer"] > .main {{
   position: relative;
   z-index: 1;
 }}
 
 .block-container{{
-  /* More whitespace from the top so the hero/title never gets blocked */
-  padding-top: 5.25rem;
-  /* Reduce “huge side whitespace” by allowing wider content */
-  max-width: 1400px;
+  padding-top: 4.75rem;   /* fixes “top text blocked” */
+  max-width: 1400px;      /* reduces side whitespace */
 }}
 
 h1,h2,h3,h4{{ color: var(--text); letter-spacing: -0.02em; }}
@@ -116,12 +125,9 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
 
 .small-muted{{ color: var(--muted); font-size: 0.92rem; line-height: 1.35; }}
 
-/* Sticky topbar (clean) */
 .apple-topbar{{
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   z-index: 1000;
   background: rgba(245,245,247,0.82);
   backdrop-filter: blur(16px);
@@ -135,6 +141,7 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
   align-items: center;
   justify-content: space-between;
 }}
+
 .brand{{
   display: flex;
   align-items: center;
@@ -143,8 +150,7 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
   letter-spacing: -0.02em;
 }}
 .brand .dot{{
-  width: 10px;
-  height: 10px;
+  width: 10px; height: 10px;
   background: var(--accent);
   border-radius: 999px;
   box-shadow: 0 0 0 4px rgba(0,113,227,0.12);
@@ -152,7 +158,6 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
 .brand small{{ color: var(--muted); font-weight: 650; }}
 .topbar-right{{ color: var(--muted); font-weight: 650; font-size: 0.92rem; }}
 
-/* Cards */
 .card{{
   background: var(--card);
   border: 1px solid var(--line);
@@ -169,33 +174,6 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
 }}
 .section-gap{{ height: 14px; }}
 
-/* Pills */
-.pills{{ display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0 6px; }}
-.pill{{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.10);
-  color: var(--text);
-  font-weight: 650;
-  font-size: 0.9rem;
-}}
-.pill-blue{{
-  background: rgba(0,113,227,0.10);
-  border-color: rgba(0,113,227,0.22);
-  color: #0b3a6a;
-}}
-
-.listing-title{{ font-size: 1.35rem; font-weight: 900; letter-spacing: -0.02em; margin: 0 0 6px 0; }}
-.listing-sub{{ color: var(--muted); font-size: 0.92rem; margin-bottom: 8px; }}
-
-.status-ok{{ color: #1f7a1f; font-weight: 800; }}
-.status-warn{{ color: #a35a00; font-weight: 800; }}
-.status-muted{{ color: var(--muted); font-weight: 650; }}
-
 /* Buttons */
 .stButton > button{{
   background: var(--accent);
@@ -204,36 +182,21 @@ h3{{ font-size: 1.15rem; font-weight: 750; }}
   border-radius: 999px;
   padding: 0.58rem 1.05rem;
   font-weight: 850;
-  box-shadow: 0 12px 30px rgba(0,113,227,0.18);
 }}
 .stButton > button:hover{{ background: var(--accent2); }}
 
-/* Make selects/sliders more visible (border + slightly darker fill) */
+/* Make selects/sliders more visible */
 [data-baseweb="select"] > div {{
   background: rgba(255,255,255,0.92) !important;
   border: 1px solid rgba(0,0,0,0.18) !important;
   border-radius: 12px !important;
   box-shadow: 0 2px 10px rgba(0,0,0,0.04) !important;
 }}
-[data-baseweb="input"] input,
-[data-baseweb="textarea"] textarea {{
-  background: rgba(255,255,255,0.92) !important;
-  border: 1px solid rgba(0,0,0,0.18) !important;
-  border-radius: 12px !important;
-}}
-/* Slider container visibility */
 div[data-testid="stSlider"] {{
   padding: 10px 12px;
   background: rgba(255,255,255,0.80);
   border: 1px solid rgba(0,0,0,0.12);
   border-radius: 14px;
-}}
-
-/* Dataframe header */
-.stDataFrame thead tr th{{
-  background-color: rgba(0,0,0,0.06) !important;
-  color: var(--text) !important;
-  border-bottom: 1px solid var(--line) !important;
 }}
 
 /* Sidebar */
@@ -243,15 +206,8 @@ div[data-testid="stSlider"] {{
 }}
 [data-testid="stSidebar"] .block-container{{ padding-top: 1.15rem; }}
 
-/* Hamburger button position (Streamlit button) */
-.hamburger-wrap {{
-  position: fixed;
-  top: 10px;
-  right: 14px;
-  z-index: 1100;
-}}
-/* Override the hamburger button style to look like an icon button */
-.hamburger-wrap .stButton > button {{
+/* Sidebar hamburger icon button */
+.sidebar-hamburger .stButton > button {{
   width: 44px !important;
   height: 44px !important;
   padding: 0 !important;
@@ -262,72 +218,31 @@ div[data-testid="stSlider"] {{
   box-shadow: none !important;
   font-size: 18px !important;
 }}
-.hamburger-wrap .stButton > button:hover {{
+.sidebar-hamburger .stButton > button:hover {{
   background: rgba(0,0,0,0.10) !important;
 }}
 
-/* Drawer overlay */
-.drawer-overlay {{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  z-index: 1200;
-}}
-.drawer {{
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  width: min(420px, 92vw);
-  background: rgba(28,28,30,0.96);
-  color: white;
-  z-index: 1201;
-  padding: 20px 18px;
-  box-shadow: -20px 0 60px rgba(0,0,0,0.45);
-}}
-.drawer h3 {{
-  color: white;
-  margin: 0 0 14px 0;
-  font-size: 1.15rem;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-}}
-.drawer .drawer-item {{
-  font-size: 1.05rem;
-  font-weight: 850;
-  letter-spacing: 0.10em;
-  padding: 14px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  margin-bottom: 10px;
-  background: rgba(255,255,255,0.06);
-}}
-.drawer .drawer-item:hover {{
-  background: rgba(255,255,255,0.10);
-}}
-.drawer .drawer-search {{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  padding: 12px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.20);
-  background: rgba(255,255,255,0.08);
-  margin: 18px 0 14px;
-  color: rgba(255,255,255,0.85);
-}}
-.drawer .drawer-signin {{
-  margin-top: 18px;
+/* Sidebar nav buttons (dark text, “chip” look) */
+.sidebar-nav button {{
   width: 100%;
-  padding: 16px 12px;
-  border-radius: 999px;
-  background: #d13b3b;
-  border: none;
-  text-align: center;
-  font-weight: 900;
-  letter-spacing: 0.18em;
+  background: rgba(0,0,0,0.04) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(0,0,0,0.10) !important;
+  border-radius: 14px !important;
+  padding: 0.65rem 0.9rem !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+  text-align: left !important;
 }}
-/* Hide Streamlit default menu/footer */
+.sidebar-nav button:hover {{
+  background: rgba(0,0,0,0.07) !important;
+}}
+.sidebar-nav-active button {{
+  background: rgba(0,113,227,0.12) !important;
+  border-color: rgba(0,113,227,0.26) !important;
+  color: #0b3a6a !important;
+}}
+
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 </style>
@@ -335,24 +250,7 @@ footer {{visibility: hidden;}}
 st.markdown(APPLE_STYLE, unsafe_allow_html=True)
 
 # ---------------------------
-# Session state defaults
-# ---------------------------
-NAV: Dict[str, str] = {
-    "🏁 Home": "home",
-    "🏠 Housing": "housing",
-    "📚 Academics": "academics",
-    "👩‍🏫 Professors": "professors",
-    "💸 Aid & Jobs": "aid_jobs",
-    "💬 Q&A": "qa",
-}
-
-if "main_nav" not in st.session_state:
-    st.session_state["main_nav"] = "🏁 Home"
-if "menu_open" not in st.session_state:
-    st.session_state["menu_open"] = False
-
-# ---------------------------
-# Topbar (visual) + Hamburger button (functional)
+# Topbar (visual only)
 # ---------------------------
 st.markdown(
     """
@@ -370,20 +268,35 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Hamburger open button (fixed, top-right)
-with st.container():
-    st.markdown('<div class="hamburger-wrap">', unsafe_allow_html=True)
-    if st.button("☰", key="open_drawer"):
-        st.session_state["menu_open"] = True
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
 # ---------------------------
-# Sidebar (status/admin)
+# Sidebar: hamburger + status/admin + (toggleable) nav
 # ---------------------------
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
 
+# Hamburger toggle INSIDE the sidebar (what you asked for)
+st.sidebar.markdown('<div class="sidebar-hamburger">', unsafe_allow_html=True)
+hamb_label = "☰" if not st.session_state["sidebar_nav_open"] else "✕"
+if st.sidebar.button(hamb_label, key="sidebar_hamburger"):
+    st.session_state["sidebar_nav_open"] = not st.session_state["sidebar_nav_open"]
+    st.rerun()
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+# When hamburger is open: show nav buttons in the LEFT sidebar (with admin/status)
+if st.session_state["sidebar_nav_open"]:
+    st.sidebar.divider()
+    st.sidebar.markdown("### Navigation")
+    for label in NAV_LABELS:
+        is_active = (st.session_state["main_nav"] == label)
+        cls = "sidebar-nav-active" if is_active else "sidebar-nav"
+        st.sidebar.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
+        if st.sidebar.button(label, key=f"side_nav_{label}"):
+            st.session_state["main_nav"] = label
+            st.session_state["sidebar_nav_open"] = False  # auto-close after choosing
+            st.rerun()
+        st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+# Status/Admin always visible (still on the left)
 st.sidebar.divider()
 st.sidebar.markdown("### 📊 Data Status")
 
@@ -413,7 +326,7 @@ if HAS_SCRAPER:
     st.sidebar.markdown("### 🔧 Admin Tools")
     with st.sidebar.expander("Update course data"):
         st.caption("Scrape latest courses from UCSB")
-        if st.button("🔄 Run Scraper", type="primary", use_container_width=True):
+        if st.sidebar.button("🔄 Run Scraper", use_container_width=True):
             with st.spinner("Scraping UCSB courses..."):
                 try:
                     scraper = UCSBCourseScraper()
@@ -439,7 +352,7 @@ st.sidebar.markdown(
 )
 
 # ---------------------------
-# HOUSING — CSV-backed listings
+# Pages
 # ---------------------------
 HOUSING_CSV = "iv_housing_listings.csv"
 
@@ -469,10 +382,8 @@ def load_housing_df() -> Optional[pd.DataFrame]:
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
 
-    if "pet_friendly" in df.columns:
-        df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
-    else:
-        df["pet_friendly"] = False
+    df["pet_friendly"] = df.get("pet_friendly", False)
+    df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
 
     df["price_per_person"] = df.apply(
         lambda r: r["price"] / r["max_residents"]
@@ -481,6 +392,40 @@ def load_housing_df() -> Optional[pd.DataFrame]:
         axis=1,
     )
     return df
+
+
+def home_page():
+    st.markdown(
+        """
+        <div class="card" style="padding:22px 22px;">
+          <div style="font-size:2.2rem; font-weight:900; letter-spacing:-0.03em;">UCSB tools, in one place.</div>
+          <div class="small-muted" style="margin-top:6px;">
+            gauchoGPT is a student-first dashboard to find housing, plan classes, check professors, and navigate aid & jobs — fast.
+          </div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('<div class="card"><b>🏠 Housing</b><div class="small-muted" style="margin-top:8px;">Filter IV listings by price, beds, status, and pets.</div></div>', unsafe_allow_html=True)
+        if st.button("Open Housing", use_container_width=True):
+            st.session_state["main_nav"] = "🏠 Housing"
+            st.rerun()
+
+    with c2:
+        st.markdown('<div class="card"><b>📚 Academics</b><div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, and explore advising resources.</div></div>', unsafe_allow_html=True)
+        if st.button("Open Academics", use_container_width=True):
+            st.session_state["main_nav"] = "📚 Academics"
+            st.rerun()
+
+    with c3:
+        st.markdown('<div class="card"><b>👩‍🏫 Professors</b><div class="small-muted" style="margin-top:8px;">Quick RMP searches + department directories.</div></div>', unsafe_allow_html=True)
+        if st.button("Open Professors", use_container_width=True):
+            st.session_state["main_nav"] = "👩‍🏫 Professors"
+            st.rerun()
 
 
 def housing_page():
@@ -561,7 +506,9 @@ def housing_page():
         <div class="card-tight">
           <div class="small-muted">
             Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
-            • Price ≤ <span class="pill pill-blue">${price_limit:,}</span>
+            • Price ≤ <span style="display:inline-flex;padding:6px 10px;border-radius:999px;background:rgba(0,113,227,0.10);border:1px solid rgba(0,113,227,0.26);color:#0b3a6a;font-weight:800;">
+              ${price_limit:,}
+            </span>
           </div>
         </div>
         <div class="section-gap"></div>
@@ -594,93 +541,18 @@ def housing_page():
             use_container_width=True,
         )
 
+    # Simple listing render (keep your existing card version if you prefer)
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
-        street = row.get("street", "")
-        unit = row.get("unit", "")
-        price = row.get("price", None)
-        bd = row.get("bedrooms", None)
-        ba = row.get("bathrooms", None)
-        max_res = row.get("max_residents", None)
-        utilities = row.get("utilities", "")
-        pet_policy = row.get("pet_policy", "")
-        pet_friendly = bool(row.get("pet_friendly", False))
-        avail_start = row.get("avail_start", "")
-        avail_end = row.get("avail_end", "")
-        status = (row.get("status") or "available").lower()
-        is_studio = bool(row.get("is_studio", False))
-        ppp = row.get("price_per_person", None)
-
-        if status == "available":
-            status_text = f"Available {avail_start}–{avail_end} (applications open)"
-            status_class = "status-ok"
-        elif status == "processing":
-            status_text = "Processing applications"
-            status_class = "status-warn"
-        elif status == "leased":
-            status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
-            status_class = "status-muted"
-        else:
-            status_text = status
-            status_class = "status-muted"
-
-        bed_label = "Studio" if is_studio else f"{int(bd) if pd.notna(bd) else '?'} bed"
-        if pd.notna(ba):
-            ba_label = f"{int(ba)} bath" if float(ba).is_integer() else f"{ba} bath"
-        else:
-            ba_label = "? bath"
-
-        residents_label = f"Up to {int(max_res)} residents" if pd.notna(max_res) else "Max residents: ?"
-        price_text = f"${int(price):,}/installment" if pd.notna(price) else "Price not listed"
-        ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
-        pet_label = pet_policy or ("Pet friendly" if pet_friendly else "No pets info")
-
         st.markdown(
             f"""
             <div class="card">
-              <div class="listing-title">{street}</div>
-              <div class="listing-sub">{unit}</div>
-
-              <div class="pills">
-                <span class="pill">{bed_label}</span>
-                <span class="pill">{ba_label}</span>
-                <span class="pill">{residents_label}</span>
-                <span class="pill">{pet_label}</span>
-              </div>
-
-              <div style="margin-top:10px;">
-                <div class="{status_class}">{status_text}</div>
-                <div style="margin-top:6px; font-weight:900; font-size:1.05rem;">
-                  {price_text}
-                  <span style="color:#6e6e73; font-weight:650;">{(" · " + ppp_text) if ppp_text else ""}</span>
-                </div>
-                {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
-              </div>
+              <div style="font-size:1.25rem;font-weight:900;">{row.get("street","")}</div>
+              <div class="small-muted">{row.get("unit","")}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        """
-        <div class="section-gap"></div>
-        <div class="card-tight">
-          <div class="small-muted">
-            Note: This is a manually curated CSV snapshot based on ivproperties.com.
-            Always verify current availability and pricing directly with the property manager.
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ---------------------------
-# PROFESSORS (RMP + dept)
-# ---------------------------
-DEPT_SITES = {
-    "PSTAT": "https://www.pstat.ucsb.edu/people",
-    "CS": "https://www.cs.ucsb.edu/people/faculty",
-    "MATH": "https://www.math.ucsb.edu/people/faculty",
-}
 
 def profs_page():
     st.markdown(
@@ -694,6 +566,12 @@ def profs_page():
         unsafe_allow_html=True,
     )
 
+    DEPT_SITES = {
+        "PSTAT": "https://www.pstat.ucsb.edu/people",
+        "CS": "https://www.cs.ucsb.edu/people/faculty",
+        "MATH": "https://www.math.ucsb.edu/people/faculty",
+    }
+
     st.markdown('<div class="card">', unsafe_allow_html=True)
     name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
     dept = st.selectbox("Department site", list(DEPT_SITES.keys()))
@@ -705,37 +583,10 @@ def profs_page():
             st.link_button("Search on RateMyProfessors", f"https://www.google.com/search?q={q}")
         else:
             st.caption("Enter a name to generate a quick RMP search link.")
-
     with col2:
         st.link_button("Open dept faculty page", DEPT_SITES[dept])
-
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class="card">
-          <div style="font-weight:900; font-size:1.05rem;">What to look for</div>
-          <div class="small-muted" style="margin-top:8px;">
-            • Syllabi from prior quarters (grading, workload, curve)<br/>
-            • RMP comments: focus on <strong>recent</strong> terms & specific anecdotes<br/>
-            • Department Discord/Slack/Reddit for up-to-date tips<br/>
-            • Ask students who took the course last quarter
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ---------------------------
-# FINANCIAL AID & JOBS
-# ---------------------------
-AID_LINKS = {
-    "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
-    "UCSB Financial Aid": "https://www.finaid.ucsb.edu/",
-    "Work-Study (UCSB)": "https://www.finaid.ucsb.edu/types-of-aid/work-study",
-    "Handshake": "https://ucsb.joinhandshake.com/",
-}
 
 def aid_jobs_page():
     st.markdown(
@@ -749,46 +600,21 @@ def aid_jobs_page():
         unsafe_allow_html=True,
     )
 
-    with st.expander("What is financial aid?"):
-        st.write(
-            """
-            Financial aid reduces your cost of attendance via grants, scholarships, work-study, and loans.
-            File the FAFSA (or CADAA if applicable) early each year and watch priority deadlines.
-            """
-        )
+    AID_LINKS = {
+        "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
+        "UCSB Financial Aid": "https://www.finaid.ucsb.edu/",
+        "Work-Study (UCSB)": "https://www.finaid.ucsb.edu/types-of-aid/work-study",
+        "Handshake": "https://ucsb.joinhandshake.com/",
+    }
 
-    with st.expander("What is work-study?"):
-        st.write(
-            """
-            Work-study is a need-based program that lets you earn money via part-time jobs on or near campus.
-            Your award caps how much you can earn under work-study each year.
-            """
-        )
-
-    with st.expander("How to get a job quickly"):
-        st.markdown(
-            """
-            1) Set up your Handshake profile + upload a resume  
-            2) Filter by On-campus or Work-study eligible  
-            3) Apply to 5–10 postings and follow up  
-            4) Ask department offices about openings  
-            5) Consider research assistant roles if you have relevant skills
-            """
-        )
-
-    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("#### Quick links")
     cols = st.columns(4)
-    items = list(AID_LINKS.items())
-    for i, (label, url) in enumerate(items):
+    for i, (label, url) in enumerate(AID_LINKS.items()):
         with cols[i % 4]:
             st.link_button(label, url)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------------------
-# Q&A placeholder
-# ---------------------------
+
 def qa_page():
     st.markdown(
         """
@@ -804,123 +630,10 @@ def qa_page():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
-        st.info("Connect to an API (e.g., OpenAI, Anthropic) or a local model here.")
-        st.code(
-            """
-import os
-# Example sketch (pseudocode):
-# from openai import OpenAI
-# client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-# resp = client.chat.completions.create(
-#     model="gpt-4o-mini",
-#     messages=[{"role": "user", "content": prompt}],
-# )
-# st.write(resp.choices[0].message.content)
-            """,
-            language="python",
-        )
+        st.info("Connect to an API (OpenAI / Anthropic / local) here.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------------------
-# HOME / ABOUT page (cards + quick jump)
-# ---------------------------
-def home_page():
-    st.markdown(
-        """
-        <div class="card" style="padding:22px 22px;">
-          <div style="font-size:2.2rem; font-weight:900; letter-spacing:-0.03em;">UCSB tools, in one place.</div>
-          <div class="small-muted" style="margin-top:6px;">
-            gauchoGPT is a student-first dashboard to find housing, plan classes, check professors, and navigate aid & jobs — fast.
-            Built to be clean, organized, and easy to use.
-          </div>
-        </div>
-        <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
-    )
 
-    # Feature cards (click -> navigate)
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            """
-            <div class="card">
-              <div style="font-weight:900; font-size:1.05rem;">🏠 Housing</div>
-              <div class="small-muted" style="margin-top:8px;">Browse IV listings from a CSV snapshot with filters for price, beds, status, and pets.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button("Open Housing", key="home_go_housing", use_container_width=True):
-            st.session_state["main_nav"] = "🏠 Housing"
-            st.rerun()
-
-    with c2:
-        st.markdown(
-            """
-            <div class="card">
-              <div style="font-weight:900; font-size:1.05rem;">📚 Academics</div>
-              <div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, and explore advising resources (CSV or live scraper).</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button("Open Academics", key="home_go_academics", use_container_width=True):
-            st.session_state["main_nav"] = "📚 Academics"
-            st.rerun()
-
-    with c3:
-        st.markdown(
-            """
-            <div class="card">
-              <div style="font-weight:900; font-size:1.05rem;">👩‍🏫 Professors</div>
-              <div class="small-muted" style="margin-top:8px;">Quick RateMyProfessors searches + department directory links in one spot.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button("Open Professors", key="home_go_profs", use_container_width=True):
-            st.session_state["main_nav"] = "👩‍🏫 Professors"
-            st.rerun()
-
-    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-
-    c4, c5 = st.columns([2, 1])
-    with c4:
-        st.markdown(
-            """
-            <div class="card">
-              <div style="font-weight:900; font-size:1.05rem;">How it works</div>
-              <div class="small-muted" style="margin-top:8px;">
-                • Housing uses <code>iv_housing_listings.csv</code><br/>
-                • Academics uses <code>gauchoGPT.db</code> (if scraped) or <code>major_courses_by_quarter.csv</code><br/>
-                • Professors & Aid/Jobs are curated links (fast + low maintenance)<br/>
-                • Q&A is a placeholder you can wire to an API (OpenAI/Anthropic/local)
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with c5:
-        st.markdown(
-            """
-            <div class="card">
-              <div style="font-weight:900; font-size:1.05rem;">Next steps</div>
-              <div class="small-muted" style="margin-top:8px;">
-                • Keep housing CSV updated<br/>
-                • Add statuses (processing/leased)<br/>
-                • Add more sources / managers<br/>
-                • Connect an LLM for Q&A
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-# ---------------------------
-# Router
-# ---------------------------
 PAGES: Dict[str, Any] = {
     "🏁 Home": home_page,
     "🏠 Housing": housing_page,
@@ -929,52 +642,6 @@ PAGES: Dict[str, Any] = {
     "💸 Aid & Jobs": aid_jobs_page,
     "💬 Q&A": qa_page,
 }
-
-# ---------------------------
-# Drawer UI (like the “3 bars” menu)
-# ---------------------------
-def render_drawer():
-    st.markdown('<div class="drawer-overlay"></div>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class="drawer">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            <div style="display:flex; align-items:center; gap:10px;">
-              <div style="width:40px;height:40px;border-radius:999px;background:rgba(255,255,255,0.10);
-                          display:flex;align-items:center;justify-content:center;font-weight:900;">🧢</div>
-              <div>
-                <div style="font-weight:900; letter-spacing:0.10em;">GAUCHOGPT</div>
-                <div style="color:rgba(255,255,255,0.70); font-size:0.9rem;">UCSB Student Helper</div>
-              </div>
-            </div>
-        </div>
-
-          <div class="drawer-search">SEARCH <span style="margin-left:auto;">🔍</span></div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Close button (Streamlit, functional)
-    c_close = st.container()
-    with c_close:
-        if st.button("✕ Close menu", key="close_drawer"):
-            st.session_state["menu_open"] = False
-            st.rerun()
-
-    # Drawer nav buttons (functional)
-    for label in NAV.keys():
-        is_active = (st.session_state["main_nav"] == label)
-        btn_label = f"{label}  ✅" if is_active else label
-        if st.button(btn_label, key=f"drawer_nav_{label}", use_container_width=True):
-            st.session_state["main_nav"] = label
-            st.session_state["menu_open"] = False
-            st.rerun()
-
-    st.markdown('<div class="drawer-signin">SIGN IN</div></div>', unsafe_allow_html=True)
-
-# Show drawer if open
-if st.session_state["menu_open"]:
-    render_drawer()
 
 # ---------------------------
 # Render selected page
