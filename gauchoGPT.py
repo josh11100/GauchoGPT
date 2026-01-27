@@ -52,23 +52,41 @@ def img_to_data_uri(path: str) -> Optional[str]:
 def safe_str(x) -> str:
     return "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
 
+def first_existing_data_uri(*paths: str) -> Optional[str]:
+    for p in paths:
+        uri = img_to_data_uri(p)
+        if uri:
+            return uri
+    return None
+
 
 # ---------------------------
 # Optional background + fallback images
 # Put files in: assets/
 # ---------------------------
-BG_URI = (
-    img_to_data_uri("assets/ucsb_bg.jpg")
-    or img_to_data_uri("assets/ucsb_bg.jpeg")
-    or img_to_data_uri("assets/ucsb_bg.png")
-    or img_to_data_uri("assets/ucsb_bg.webp")
+BG_URI = first_existing_data_uri(
+    "assets/ucsb_bg.jpg", "assets/ucsb_bg.jpeg", "assets/ucsb_bg.png", "assets/ucsb_bg.webp"
 )
 
-FALLBACK_LISTING_URI = (
-    img_to_data_uri("assets/ucsb_fallback.jpg")
-    or img_to_data_uri("assets/ucsb_fallback.jpeg")
-    or img_to_data_uri("assets/ucsb_fallback.png")
-    or img_to_data_uri("assets/ucsb_fallback.webp")
+FALLBACK_LISTING_URI = first_existing_data_uri(
+    "assets/ucsb_fallback.jpg", "assets/ucsb_fallback.jpeg", "assets/ucsb_fallback.png", "assets/ucsb_fallback.webp"
+)
+
+# Optional thumbnails for home rows (add any of these; totally optional)
+HOME_HOUSING_URI = first_existing_data_uri(
+    "assets/home_housing.jpg", "assets/home_housing.jpeg", "assets/home_housing.png", "assets/home_housing.webp"
+)
+HOME_ACADEMICS_URI = first_existing_data_uri(
+    "assets/home_academics.jpg", "assets/home_academics.jpeg", "assets/home_academics.png", "assets/home_academics.webp"
+)
+HOME_PROFS_URI = first_existing_data_uri(
+    "assets/home_profs.jpg", "assets/home_profs.jpeg", "assets/home_profs.png", "assets/home_profs.webp"
+)
+HOME_AID_URI = first_existing_data_uri(
+    "assets/home_aid.jpg", "assets/home_aid.jpeg", "assets/home_aid.png", "assets/home_aid.webp"
+)
+HOME_QA_URI = first_existing_data_uri(
+    "assets/home_qa.jpg", "assets/home_qa.jpeg", "assets/home_qa.png", "assets/home_qa.webp"
 )
 
 REMOTE_FALLBACK_IMAGE_URL = None  # optional, set to a public image URL if you want
@@ -143,7 +161,6 @@ f"""
 }}
 
 .block-container {{
-  /* extra space so the topbar never blocks titles */
   padding-top: 5.2rem;
   max-width: 1480px;
 }}
@@ -289,6 +306,46 @@ div[data-testid="stSlider"] {{
   background: rgba(253,181,21,0.24) !important;
   border-color: rgba(253,181,21,0.42) !important;
   color: #1f2937 !important;
+}}
+
+/* Home: stacked rows */
+.home-row {{
+  display:flex;
+  gap:16px;
+  align-items:center;
+  justify-content:space-between;
+}}
+.home-left {{
+  display:flex;
+  gap:16px;
+  align-items:center;
+}}
+.home-thumb {{
+  width: 160px;
+  height: 96px;
+  border-radius: 16px;
+  border: 1px solid rgba(2,6,23,0.10);
+  overflow: hidden;
+  background: rgba(0,0,0,0.04);
+  flex: 0 0 auto;
+}}
+.home-thumb img {{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}}
+.home-title {{
+  font-size: 1.20rem;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}}
+.home-desc {{
+  margin-top: 6px;
+  max-width: 820px;
+}}
+@media (max-width: 900px) {{
+  .home-row {{ flex-direction: column; align-items: flex-start; }}
+  .home-thumb {{ width: 100%; height: 160px; }}
 }}
 
 /* Housing listing layout */
@@ -450,8 +507,38 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
 
 # ---------------------------
-# HOME
+# HOME (UPDATED: stacked full-width rows)
 # ---------------------------
+def _home_row(title: str, desc: str, btn_text: str, nav_target: str, img_uri: Optional[str] = None):
+    img_html = ""
+    if img_uri:
+        img_html = f'<div class="home-thumb"><img src="{img_uri}" alt="UCSB" /></div>'
+
+    render_html(f"""
+    <div class="card">
+      <div class="home-row">
+        <div class="home-left">
+          {img_html}
+          <div>
+            <div class="home-title">{title}</div>
+            <div class="small-muted home-desc">{desc}</div>
+          </div>
+        </div>
+        <div style="min-width:230px;"></div>
+      </div>
+    </div>
+    """)
+
+    # Keep Streamlit button outside the HTML so it remains clickable/reliable
+    _, cbtn = st.columns([1, 0.25])
+    with cbtn:
+        if st.button(btn_text, use_container_width=True):
+            st.session_state["main_nav"] = nav_target
+            st.rerun()
+
+    render_html('<div class="section-gap"></div>')
+
+
 def home_page():
     render_html("""
     <div class="hero">
@@ -463,70 +550,51 @@ def home_page():
     <div class="section-gap"></div>
     """)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">🏠 Housing</div>
-          <div class="small-muted" style="margin-top:8px;">Browse IV listings with clean filters + optional photos.</div>
-        </div>
-        """)
-        if st.button("Open Housing", use_container_width=True):
-            st.session_state["main_nav"] = "🏠 Housing"
-            st.rerun()
+    _home_row(
+        "🏠 Housing",
+        "Browse IV listings with clean filters + optional photos.",
+        "Open Housing",
+        "🏠 Housing",
+        HOME_HOUSING_URI,
+    )
+    _home_row(
+        "📚 Academics",
+        "Plan quarters, search courses, explore resources.",
+        "Open Academics",
+        "📚 Academics",
+        HOME_ACADEMICS_URI,
+    )
+    _home_row(
+        "👩‍🏫 Professors",
+        "Fast RMP searches + department pages.",
+        "Open Professors",
+        "👩‍🏫 Professors",
+        HOME_PROFS_URI,
+    )
+    _home_row(
+        "💸 Aid & Jobs",
+        "FAFSA, work-study, UCSB aid + Handshake links.",
+        "Open Aid & Jobs",
+        "💸 Aid & Jobs",
+        HOME_AID_URI,
+    )
+    _home_row(
+        "💬 Q&A",
+        "Optional: wire to an LLM (OpenAI/Anthropic/local).",
+        "Open Q&A",
+        "💬 Q&A",
+        HOME_QA_URI,
+    )
 
-    with c2:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">📚 Academics</div>
-          <div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, explore resources.</div>
-        </div>
-        """)
-        if st.button("Open Academics", use_container_width=True):
-            st.session_state["main_nav"] = "📚 Academics"
-            st.rerun()
-
-    with c3:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">👩‍🏫 Professors</div>
-          <div class="small-muted" style="margin-top:8px;">Fast RMP searches + department pages.</div>
-        </div>
-        """)
-        if st.button("Open Professors", use_container_width=True):
-            st.session_state["main_nav"] = "👩‍🏫 Professors"
-            st.rerun()
-
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">💸 Aid & Jobs</div>
-          <div class="small-muted" style="margin-top:8px;">FAFSA, work-study, UCSB aid + Handshake links.</div>
-        </div>
-        """)
-        if st.button("Open Aid & Jobs", use_container_width=True):
-            st.session_state["main_nav"] = "💸 Aid & Jobs"
-            st.rerun()
-
-    with c5:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">💬 Q&A</div>
-          <div class="small-muted" style="margin-top:8px;">Optional: wire to an LLM (OpenAI/Anthropic/local).</div>
-        </div>
-        """)
-        if st.button("Open Q&A", use_container_width=True):
-            st.session_state["main_nav"] = "💬 Q&A"
-            st.rerun()
-
-    with c6:
-        render_html("""
-        <div class="card-soft">
-          <div style="font-weight:950;">🧢 Tip</div>
-          <div class="small-muted" style="margin-top:8px;">Add <code>assets/ucsb_bg.jpg</code> for a real UCSB hero photo.</div>
-        </div>
-        """)
+    render_html("""
+    <div class="card-soft">
+      <div style="font-weight:950;">🧢 Tip</div>
+      <div class="small-muted" style="margin-top:8px;">
+        Add <code>assets/home_housing.jpg</code>, <code>assets/home_academics.jpg</code>, etc. for thumbnails.
+        Background: <code>assets/ucsb_bg.jpg</code>.
+      </div>
+    </div>
+    """)
 
 
 # ---------------------------
@@ -637,7 +705,7 @@ def housing_page():
             use_container_width=True,
         )
 
-    # Listing cards (IMPORTANT: renders via st.markdown through render_html, not iframe)
+    # Listing cards
     for _, row in filtered.sort_values(["street", "unit"], na_position="last").iterrows():
         street = safe_str(row.get("street")).strip()
         unit = safe_str(row.get("unit")).strip()
