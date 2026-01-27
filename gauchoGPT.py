@@ -35,7 +35,10 @@ st.set_page_config(
 # Helpers
 # ---------------------------
 def render_html(html: str) -> None:
-    """Render HTML reliably (prevents Streamlit from printing raw tags)."""
+    """
+    Render HTML reliably.
+    IMPORTANT: All custom UI blocks must go through this.
+    """
     st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
 
 def img_to_data_uri(path: str) -> Optional[str]:
@@ -52,44 +55,27 @@ def img_to_data_uri(path: str) -> Optional[str]:
 def safe_str(x) -> str:
     return "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
 
-def first_existing_data_uri(*paths: str) -> Optional[str]:
-    for p in paths:
-        uri = img_to_data_uri(p)
-        if uri:
-            return uri
-    return None
-
 
 # ---------------------------
 # Optional background + fallback images
 # Put files in: assets/
 # ---------------------------
-BG_URI = first_existing_data_uri(
-    "assets/ucsb_bg.jpg", "assets/ucsb_bg.jpeg", "assets/ucsb_bg.png", "assets/ucsb_bg.webp"
+BG_URI = (
+    img_to_data_uri("assets/ucsb_bg.jpg")
+    or img_to_data_uri("assets/ucsb_bg.jpeg")
+    or img_to_data_uri("assets/ucsb_bg.png")
+    or img_to_data_uri("assets/ucsb_bg.webp")
 )
 
-FALLBACK_LISTING_URI = first_existing_data_uri(
-    "assets/ucsb_fallback.jpg", "assets/ucsb_fallback.jpeg", "assets/ucsb_fallback.png", "assets/ucsb_fallback.webp"
+FALLBACK_LISTING_URI = (
+    img_to_data_uri("assets/ucsb_fallback.jpg")
+    or img_to_data_uri("assets/ucsb_fallback.jpeg")
+    or img_to_data_uri("assets/ucsb_fallback.png")
+    or img_to_data_uri("assets/ucsb_fallback.webp")
 )
 
-# Optional thumbnails for home rows (add any of these; totally optional)
-HOME_HOUSING_URI = first_existing_data_uri(
-    "assets/home_housing.jpg", "assets/home_housing.jpeg", "assets/home_housing.png", "assets/home_housing.webp"
-)
-HOME_ACADEMICS_URI = first_existing_data_uri(
-    "assets/home_academics.jpg", "assets/home_academics.jpeg", "assets/home_academics.png", "assets/home_academics.webp"
-)
-HOME_PROFS_URI = first_existing_data_uri(
-    "assets/home_profs.jpg", "assets/home_profs.jpeg", "assets/home_profs.png", "assets/home_profs.webp"
-)
-HOME_AID_URI = first_existing_data_uri(
-    "assets/home_aid.jpg", "assets/home_aid.jpeg", "assets/home_aid.png", "assets/home_aid.webp"
-)
-HOME_QA_URI = first_existing_data_uri(
-    "assets/home_qa.jpg", "assets/home_qa.jpeg", "assets/home_qa.png", "assets/home_qa.webp"
-)
-
-REMOTE_FALLBACK_IMAGE_URL = None  # optional, set to a public image URL if you want
+# Optional: You can set this to a public URL if you want a remote fallback
+REMOTE_FALLBACK_IMAGE_URL = None
 
 
 # ---------------------------
@@ -138,8 +124,7 @@ UCSB_STYLE = f"""
                "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }}
 
-{"".join([
-f"""
+{f"""
 [data-testid="stAppViewContainer"]::before {{
   content: "";
   position: fixed;
@@ -152,8 +137,7 @@ f"""
   background-position: center;
   z-index: 0;
 }}
-""" if BG_URI else ""
-])}
+""" if BG_URI else ""}
 
 [data-testid="stAppViewContainer"] > .main {{
   position: relative;
@@ -308,44 +292,39 @@ div[data-testid="stSlider"] {{
   color: #1f2937 !important;
 }}
 
-/* Home: stacked rows */
+/* Home rows (matches your screenshot style) */
 .home-row {{
   display:flex;
-  gap:16px;
   align-items:center;
   justify-content:space-between;
+  gap: 14px;
 }}
 .home-left {{
   display:flex;
-  gap:16px;
   align-items:center;
+  gap: 14px;
 }}
 .home-thumb {{
-  width: 160px;
-  height: 96px;
+  width: 64px;
+  height: 64px;
   border-radius: 16px;
+  overflow:hidden;
   border: 1px solid rgba(2,6,23,0.10);
-  overflow: hidden;
   background: rgba(0,0,0,0.04);
   flex: 0 0 auto;
 }}
 .home-thumb img {{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width:100%;
+  height:100%;
+  object-fit:cover;
 }}
 .home-title {{
-  font-size: 1.20rem;
+  font-size: 1.10rem;
   font-weight: 950;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }}
 .home-desc {{
-  margin-top: 6px;
-  max-width: 820px;
-}}
-@media (max-width: 900px) {{
-  .home-row {{ flex-direction: column; align-items: flex-start; }}
-  .home-thumb {{ width: 100%; height: 160px; }}
+  margin-top: 4px;
 }}
 
 /* Housing listing layout */
@@ -507,29 +486,28 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
 
 # ---------------------------
-# HOME (UPDATED: stacked full-width rows)
+# HOME
 # ---------------------------
-def _home_row(title: str, desc: str, btn_text: str, nav_target: str, img_uri: Optional[str] = None):
-    img_html = ""
-    if img_uri:
-        img_html = f'<div class="home-thumb"><img src="{img_uri}" alt="UCSB" /></div>'
+def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: Optional[str] = None):
+    thumb_html = ""
+    if thumb_uri:
+        thumb_html = f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>'
 
     render_html(f"""
     <div class="card">
       <div class="home-row">
         <div class="home-left">
-          {img_html}
+          {thumb_html}
           <div>
             <div class="home-title">{title}</div>
             <div class="small-muted home-desc">{desc}</div>
           </div>
         </div>
-        <div style="min-width:230px;"></div>
       </div>
     </div>
     """)
 
-    # Keep Streamlit button outside the HTML so it remains clickable/reliable
+    # Button aligned to the right (matches your screenshot)
     _, cbtn = st.columns([1, 0.25])
     with cbtn:
         if st.button(btn_text, use_container_width=True):
@@ -550,51 +528,53 @@ def home_page():
     <div class="section-gap"></div>
     """)
 
+    # Optional home thumbnails:
+    # Put your own images in assets/ and change these filenames if you want
+    home_thumb = (
+        img_to_data_uri("assets/home_thumb.jpg")
+        or img_to_data_uri("assets/home_thumb.png")
+        or None
+    )
+
     _home_row(
         "🏠 Housing",
         "Browse IV listings with clean filters + optional photos.",
         "Open Housing",
         "🏠 Housing",
-        HOME_HOUSING_URI,
+        thumb_uri=home_thumb,
     )
+
     _home_row(
         "📚 Academics",
         "Plan quarters, search courses, explore resources.",
         "Open Academics",
         "📚 Academics",
-        HOME_ACADEMICS_URI,
+        thumb_uri=home_thumb,
     )
+
     _home_row(
         "👩‍🏫 Professors",
         "Fast RMP searches + department pages.",
         "Open Professors",
         "👩‍🏫 Professors",
-        HOME_PROFS_URI,
+        thumb_uri=home_thumb,
     )
+
     _home_row(
         "💸 Aid & Jobs",
         "FAFSA, work-study, UCSB aid + Handshake links.",
         "Open Aid & Jobs",
         "💸 Aid & Jobs",
-        HOME_AID_URI,
+        thumb_uri=home_thumb,
     )
+
     _home_row(
         "💬 Q&A",
         "Optional: wire to an LLM (OpenAI/Anthropic/local).",
         "Open Q&A",
         "💬 Q&A",
-        HOME_QA_URI,
+        thumb_uri=home_thumb,
     )
-
-    render_html("""
-    <div class="card-soft">
-      <div style="font-weight:950;">🧢 Tip</div>
-      <div class="small-muted" style="margin-top:8px;">
-        Add <code>assets/home_housing.jpg</code>, <code>assets/home_academics.jpg</code>, etc. for thumbnails.
-        Background: <code>assets/ucsb_bg.jpg</code>.
-      </div>
-    </div>
-    """)
 
 
 # ---------------------------
@@ -705,7 +685,7 @@ def housing_page():
             use_container_width=True,
         )
 
-    # Listing cards
+    # Listing cards (render via render_html; do NOT use st.write/html strings)
     for _, row in filtered.sort_values(["street", "unit"], na_position="last").iterrows():
         street = safe_str(row.get("street")).strip()
         unit = safe_str(row.get("unit")).strip()
