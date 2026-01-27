@@ -30,10 +30,13 @@ st.set_page_config(
     layout="wide",
 )
 
+# ---------------------------
+# Helpers
+# ---------------------------
+def render_html(html: str) -> None:
+    """Render HTML reliably (prevents Streamlit from printing raw tags)."""
+    st.markdown(html, unsafe_allow_html=True)
 
-# ---------------------------
-# Helpers: local image -> data URI
-# ---------------------------
 def img_to_data_uri(path: str) -> Optional[str]:
     if not os.path.exists(path):
         return None
@@ -44,6 +47,9 @@ def img_to_data_uri(path: str) -> Optional[str]:
         b64 = base64.b64encode(f.read()).decode("utf-8")
     mime = "jpeg" if ext in {"jpg", "jpeg"} else ext
     return f"data:image/{mime};base64,{b64}"
+
+def safe_str(x) -> str:
+    return "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
 
 
 # Optional hero background (local file)
@@ -62,9 +68,7 @@ FALLBACK_LISTING_URI = (
     or img_to_data_uri("assets/ucsb_fallback.webp")
 )
 
-# Optional: You can set a remote fallback image URL instead (leave None to only use local)
-REMOTE_FALLBACK_IMAGE_URL = None
-
+REMOTE_FALLBACK_IMAGE_URL = None  # optional
 
 # ---------------------------
 # Session state defaults
@@ -113,7 +117,6 @@ UCSB_STYLE = f"""
 }}
 
 {f"""
-/* HERO background image */
 [data-testid="stAppViewContainer"]::before {{
   content: "";
   position: fixed;
@@ -134,14 +137,9 @@ UCSB_STYLE = f"""
 }}
 
 .block-container{{
-  padding-top: 5.1rem;   /* fixes top text blocked */
-  max-width: 1480px;     /* less empty whitespace left/right */
+  padding-top: 5.1rem;
+  max-width: 1480px;
 }}
-
-h1,h2,h3,h4{{ color: var(--text); letter-spacing: -0.02em; }}
-h1{{ font-size: 2.35rem; font-weight: 900; }}
-h2{{ font-size: 1.55rem; font-weight: 850; }}
-h3{{ font-size: 1.15rem; font-weight: 800; }}
 
 .small-muted{{ color: var(--muted); font-size: 0.93rem; line-height: 1.35; }}
 
@@ -162,10 +160,7 @@ h3{{ font-size: 1.15rem; font-weight: 800; }}
   align-items: center;
   justify-content: space-between;
 }}
-.brand{{
-  display:flex; align-items:center; gap:10px;
-  font-weight: 900;
-}}
+.brand{{ display:flex; align-items:center; gap:10px; font-weight: 900; }}
 .brand-dot{{
   width: 10px; height: 10px;
   background: var(--gold);
@@ -173,11 +168,7 @@ h3{{ font-size: 1.15rem; font-weight: 800; }}
   box-shadow: 0 0 0 5px rgba(253,181,21,0.18);
 }}
 .brand small{{ color: var(--muted); font-weight: 700; }}
-.topbar-right{{
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 0.93rem;
-}}
+.topbar-right{{ color: var(--muted); font-weight: 700; font-size: 0.93rem; }}
 
 /* Cards */
 .card{{
@@ -219,22 +210,15 @@ h3{{ font-size: 1.15rem; font-weight: 800; }}
   font-weight: 750;
   font-size: 0.90rem;
 }}
-.pill-gold{{
-  background: rgba(253,181,21,0.18);
-  border-color: rgba(253,181,21,0.30);
-}}
-.pill-blue{{
-  background: rgba(10,132,255,0.14);
-  border-color: rgba(10,132,255,0.28);
-}}
+.pill-gold{{ background: rgba(253,181,21,0.18); border-color: rgba(253,181,21,0.30); }}
+.pill-blue{{ background: rgba(10,132,255,0.14); border-color: rgba(10,132,255,0.28); }}
 
 /* Status */
 .status-ok{{ color: var(--ok); font-weight: 900; }}
 .status-warn{{ color: var(--warn); font-weight: 900; }}
-.status-bad{{ color: var(--bad); font-weight: 900; }}
-.status-muted{{ color: var(--muted); font-weight: 750; }}
+.status-muted{{ color: var(--muted); font-weight: 800; }}
 
-/* Global buttons */
+/* Buttons */
 .stButton > button{{
   background: linear-gradient(135deg, var(--blue2), var(--blue));
   border: 1px solid rgba(255,255,255,0.12);
@@ -244,9 +228,7 @@ h3{{ font-size: 1.15rem; font-weight: 800; }}
   font-weight: 900;
   box-shadow: 0 10px 25px rgba(0,113,227,0.20);
 }}
-.stButton > button:hover{{
-  filter: brightness(1.05);
-}}
+.stButton > button:hover{{ filter: brightness(1.05); }}
 
 /* Inputs visibility */
 [data-baseweb="select"] > div {{
@@ -263,16 +245,12 @@ div[data-testid="stSlider"] {{
 }}
 
 /* Sidebar */
-[data-testid="stSidebar"]{{
-  background: rgba(246,247,251,0.92);
-  border-right: 1px solid var(--line);
-}}
+[data-testid="stSidebar"]{{ background: rgba(246,247,251,0.92); border-right: 1px solid var(--line); }}
 [data-testid="stSidebar"] .block-container{{ padding-top: 1.10rem; }}
 
 /* Sidebar hamburger */
 .sidebar-hamburger .stButton > button {{
-  width: 46px !important;
-  height: 46px !important;
+  width: 46px !important; height: 46px !important;
   padding: 0 !important;
   border-radius: 999px !important;
   background: rgba(0,54,96,0.10) !important;
@@ -296,16 +274,14 @@ div[data-testid="stSlider"] {{
   font-weight: 950 !important;
   text-align: left !important;
 }}
-.sidebar-nav button:hover {{
-  background: rgba(0,54,96,0.10) !important;
-}}
+.sidebar-nav button:hover {{ background: rgba(0,54,96,0.10) !important; }}
 .sidebar-nav-active button {{
   background: rgba(253,181,21,0.24) !important;
   border-color: rgba(253,181,21,0.42) !important;
   color: #1f2937 !important;
 }}
 
-/* Housing listing card layout */
+/* Housing listing layout */
 .listing-wrap{{
   display:grid;
   grid-template-columns: 210px 1fr;
@@ -323,38 +299,23 @@ div[data-testid="stSlider"] {{
   overflow: hidden;
   background: rgba(0,0,0,0.04);
 }}
-.thumb img{{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}}
-.listing-title{{
-  font-size: 1.25rem;
-  font-weight: 950;
-  letter-spacing:-0.02em;
-}}
-.listing-sub{{
-  color: var(--muted);
-  font-size: 0.92rem;
-  margin-top: 3px;
-}}
-.price-row{{
-  margin-top: 10px;
-  font-weight: 950;
-  font-size: 1.05rem;
-}}
+.thumb img{{ width: 100%; height: 100%; object-fit: cover; }}
+.listing-title{{ font-size: 1.25rem; font-weight: 950; letter-spacing:-0.02em; }}
+.listing-sub{{ color: var(--muted); font-size: 0.92rem; margin-top: 3px; }}
+.price-row{{ margin-top: 10px; font-weight: 950; font-size: 1.05rem; }}
 
+/* Hide Streamlit chrome */
 #MainMenu {{visibility: hidden;}}
 footer {{visibility: hidden;}}
 </style>
 """
-st.markdown(UCSB_STYLE, unsafe_allow_html=True)
+render_html(UCSB_STYLE)
 
 
 # ---------------------------
 # Topbar
 # ---------------------------
-st.markdown(
+render_html(
     """
     <div class="topbar">
       <div class="topbar-inner">
@@ -366,8 +327,7 @@ st.markdown(
         <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>
       </div>
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -446,7 +406,6 @@ st.sidebar.markdown(
 # ---------------------------
 HOUSING_CSV = "iv_housing_listings.csv"
 
-
 def load_housing_df() -> Optional[pd.DataFrame]:
     if not os.path.exists(HOUSING_CSV):
         st.error(f"Missing CSV file: {HOUSING_CSV}. Place it next to gauchoGPT.py.")
@@ -454,18 +413,14 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df = pd.read_csv(HOUSING_CSV)
 
-    # expected columns (create if missing)
     for col in [
         "street", "unit", "avail_start", "avail_end",
         "price", "bedrooms", "bathrooms", "max_residents",
         "utilities", "pet_policy", "pet_friendly", "status",
-        "image_url", "listing_url"
+        "image_url", "listing_url",
     ]:
         if col not in df.columns:
             df[col] = None
-
-    if "status" not in df.columns or df["status"].isna().all():
-        df["status"] = "available"
 
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
@@ -473,6 +428,7 @@ def load_housing_df() -> Optional[pd.DataFrame]:
     df["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
 
     df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
+    df["status"] = df["status"].fillna("available").astype(str)
     df["is_studio"] = df["bedrooms"].fillna(0).astype(float).eq(0)
 
     df["price_per_person"] = df.apply(
@@ -485,7 +441,7 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
 
 def home_page():
-    st.markdown(
+    render_html(
         """
         <div class="hero">
           <div class="hero-title">UCSB tools, in one place.</div>
@@ -494,78 +450,59 @@ def home_page():
           </div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(
+        render_html(
             """
             <div class="card-soft">
               <div style="font-weight:950;">🏠 Housing</div>
               <div class="small-muted" style="margin-top:8px;">Browse IV listings with clean filters + optional photos.</div>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
         if st.button("Open Housing", use_container_width=True):
             st.session_state["main_nav"] = "🏠 Housing"
             st.rerun()
 
     with c2:
-        st.markdown(
+        render_html(
             """
             <div class="card-soft">
               <div style="font-weight:950;">📚 Academics</div>
               <div class="small-muted" style="margin-top:8px;">Plan quarters, search courses, explore resources.</div>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
         if st.button("Open Academics", use_container_width=True):
             st.session_state["main_nav"] = "📚 Academics"
             st.rerun()
 
     with c3:
-        st.markdown(
+        render_html(
             """
             <div class="card-soft">
               <div style="font-weight:950;">👩‍🏫 Professors</div>
               <div class="small-muted" style="margin-top:8px;">Fast RMP searches + department pages.</div>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
         if st.button("Open Professors", use_container_width=True):
             st.session_state["main_nav"] = "👩‍🏫 Professors"
             st.rerun()
 
-    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class="card-soft">
-          <div style="font-weight:950;">Want more visuals?</div>
-          <div class="small-muted" style="margin-top:6px;">
-            Add <code>assets/ucsb_bg.jpg</code> for a hero background + <code>assets/ucsb_fallback.jpg</code> for listing thumbnails.
-            If your housing CSV has <code>image_url</code>, listings will show real photos automatically.
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
 
 def housing_page():
-    st.markdown(
+    render_html(
         """
         <div class="card-soft">
           <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
           <div class="small-muted">CSV snapshot from ivproperties.com (2026–27). Photos show if <code>image_url</code> exists.</div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     df = load_housing_df()
@@ -573,8 +510,7 @@ def housing_page():
         st.warning("No housing data found in the CSV.")
         return
 
-    # Filters
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    render_html('<div class="card">')
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.3, 1.3, 1.3])
 
     with col_f1:
@@ -590,10 +526,8 @@ def housing_page():
 
     with col_f4:
         pet_choice = st.selectbox("Pets", ["Any", "Only pet-friendly", "No pets allowed"], index=0)
+    render_html("</div>")
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Apply filters
     filtered = df.copy()
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
@@ -609,22 +543,23 @@ def housing_page():
             pass
 
     s = status_choice.lower()
+    status_lower = filtered["status"].fillna("").astype(str).str.lower().str.strip()
     if s.startswith("available"):
-        filtered = filtered[filtered["status"].fillna("").str.lower() == "available"]
+        filtered = filtered[status_lower == "available"]
     elif s.startswith("processing"):
-        filtered = filtered[filtered["status"].fillna("").str.lower() == "processing"]
+        filtered = filtered[status_lower == "processing"]
     elif s.startswith("leased"):
-        filtered = filtered[filtered["status"].fillna("").str.lower() == "leased"]
+        filtered = filtered[status_lower == "leased"]
 
     if pet_choice == "Only pet-friendly":
         filtered = filtered[filtered["pet_friendly"] == True]
     elif pet_choice == "No pets allowed":
         filtered = filtered[
             (filtered["pet_friendly"] == False)
-            | (filtered["pet_policy"].fillna("").str.contains("No pets", case=False))
+            | (filtered["pet_policy"].fillna("").astype(str).str.contains("No pets", case=False))
         ]
 
-    st.markdown(
+    render_html(
         f"""
         <div class="section-gap"></div>
         <div class="card-soft">
@@ -634,8 +569,7 @@ def housing_page():
           </div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     if filtered.empty:
@@ -657,25 +591,25 @@ def housing_page():
             use_container_width=True,
         )
 
-    # Listing cards with optional image
+    # ✅ KEY FIX: All listing cards render via render_html(...), never plain st.markdown(...)
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
-        street = str(row.get("street") or "").strip()
-        unit = str(row.get("unit") or "").strip()
-        status = str(row.get("status") or "available").lower().strip()
+        street = safe_str(row.get("street")).strip()
+        unit = safe_str(row.get("unit")).strip()
+        status = safe_str(row.get("status")).lower().strip()
 
         price = row.get("price")
         bedrooms = row.get("bedrooms")
         bathrooms = row.get("bathrooms")
         max_res = row.get("max_residents")
-        utilities = str(row.get("utilities") or "").strip()
-        pet_policy = str(row.get("pet_policy") or "").strip()
+        utilities = safe_str(row.get("utilities")).strip()
+        pet_policy = safe_str(row.get("pet_policy")).strip()
         pet_friendly = bool(row.get("pet_friendly", False))
         ppp = row.get("price_per_person")
-        avail_start = str(row.get("avail_start") or "").strip()
-        avail_end = str(row.get("avail_end") or "").strip()
+        avail_start = safe_str(row.get("avail_start")).strip()
+        avail_end = safe_str(row.get("avail_end")).strip()
 
-        image_url = row.get("image_url")
-        listing_url = row.get("listing_url")
+        image_url = safe_str(row.get("image_url")).strip()
+        listing_url = safe_str(row.get("listing_url")).strip()
 
         # Status styling
         if status == "available":
@@ -688,40 +622,37 @@ def housing_page():
             status_text = f"Currently leased (through {avail_end})" if avail_end else "Currently leased"
             status_class = "status-muted"
         else:
-            status_text = status.title()
+            status_text = status.title() if status else "Status unknown"
             status_class = "status-muted"
 
-        # Labels
         is_studio = pd.isna(bedrooms) or float(bedrooms) == 0
         bed_label = "Studio" if is_studio else f"{int(bedrooms) if pd.notna(bedrooms) else '?'} bed"
+
         if pd.notna(bathrooms):
             ba_label = f"{int(bathrooms)} bath" if float(bathrooms).is_integer() else f"{bathrooms} bath"
         else:
             ba_label = "? bath"
+
         residents_label = f"Up to {int(max_res)} residents" if pd.notna(max_res) else "Max residents: ?"
         pet_label = pet_policy or ("Pet friendly" if pet_friendly else "No pets info")
 
-        # Price
         price_text = f"${int(price):,}/installment" if pd.notna(price) else "Price not listed"
         ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
 
-        # Image choice: listing image_url -> local fallback -> remote fallback -> none
+        # Image selection
         img_html = ""
-        if isinstance(image_url, str) and image_url.strip():
-            img_html = f'<img src="{image_url.strip()}" alt="Listing photo" />'
+        if image_url:
+            img_html = f'<img src="{image_url}" alt="Listing photo" />'
         elif FALLBACK_LISTING_URI:
             img_html = f'<img src="{FALLBACK_LISTING_URI}" alt="UCSB" />'
         elif REMOTE_FALLBACK_IMAGE_URL:
             img_html = f'<img src="{REMOTE_FALLBACK_IMAGE_URL}" alt="UCSB" />'
-        else:
-            img_html = ""
 
-        # Optional listing link button
-        link_btn = ""
-        if isinstance(listing_url, str) and listing_url.strip():
-            link_btn = f'<a href="{listing_url.strip()}" target="_blank" style="text-decoration:none;"><span class="pill pill-gold">View listing ↗</span></a>'
+        link_chip = ""
+        if listing_url:
+            link_chip = f'<a href="{listing_url}" target="_blank" style="text-decoration:none;"><span class="pill pill-gold">View listing ↗</span></a>'
 
-        st.markdown(
+        render_html(
             f"""
             <div class="card">
               <div class="listing-wrap">
@@ -736,7 +667,7 @@ def housing_page():
                     <span class="pill">{ba_label}</span>
                     <span class="pill">{residents_label}</span>
                     <span class="pill pill-gold">{pet_label}</span>
-                    {link_btn}
+                    {link_chip}
                   </div>
 
                   <div style="margin-top:10px;">
@@ -751,8 +682,7 @@ def housing_page():
               </div>
             </div>
             <div class="section-gap"></div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 
@@ -765,24 +695,21 @@ DEPT_SITES = {
     "MATH": "https://www.math.ucsb.edu/people/faculty",
 }
 
-
 def profs_page():
-    st.markdown(
+    render_html(
         """
         <div class="card-soft">
           <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Professors & course intel</div>
           <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    render_html('<div class="card">')
     name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
     dept = st.selectbox("Department site", list(DEPT_SITES.keys()))
     col1, col2 = st.columns(2)
-
     with col1:
         if name:
             q = quote_plus(f"{name} site:ratemyprofessors.com UCSB")
@@ -791,8 +718,7 @@ def profs_page():
             st.caption("Enter a name to generate a quick RMP search link.")
     with col2:
         st.link_button("Open dept faculty page", DEPT_SITES[dept])
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    render_html("</div>")
 
 
 # ---------------------------
@@ -805,17 +731,15 @@ AID_LINKS = {
     "Handshake": "https://ucsb.joinhandshake.com/",
 }
 
-
 def aid_jobs_page():
-    st.markdown(
+    render_html(
         """
         <div class="card-soft">
           <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
           <div class="small-muted">Short explainers + quick links.</div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     with st.expander("What is financial aid?"):
@@ -834,35 +758,34 @@ def aid_jobs_page():
             """
         )
 
-    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    render_html('<div class="section-gap"></div>')
+    render_html('<div class="card">')
     cols = st.columns(4)
     items = list(AID_LINKS.items())
     for i, (label, url) in enumerate(items):
         with cols[i % 4]:
             st.link_button(label, url)
-    st.markdown("</div>", unsafe_allow_html=True)
+    render_html("</div>")
 
 
 # ---------------------------
 # Q&A
 # ---------------------------
 def qa_page():
-    st.markdown(
+    render_html(
         """
         <div class="card-soft">
           <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Ask gauchoGPT</div>
           <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
         </div>
         <div class="section-gap"></div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    render_html('<div class="card">')
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
         st.info("Connect to an API (OpenAI / Anthropic / local) here.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    render_html("</div>")
 
 
 # ---------------------------
