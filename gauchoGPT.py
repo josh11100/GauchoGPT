@@ -1,4 +1,4 @@
-# gauchoGPT — Streamlit “Apple-clean” UI refresh + Modern box-tab navigation
+# gauchoGPT — Streamlit “Apple-clean” UI + Home/About landing + Modern box-tab navigation
 # ------------------------------------------------------------
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ APPLE_STYLE = """
                "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
-/* Give top whitespace for sticky bar, and widen content a bit */
+/* Give top whitespace for sticky bar, and widen content */
 .block-container{
   padding-top: 3.25rem;
   max-width: 1200px;
@@ -84,10 +84,10 @@ h1{ font-size: 2.35rem; font-weight: 850; }
 h2{ font-size: 1.55rem; font-weight: 800; }
 h3{ font-size: 1.15rem; font-weight: 750; }
 
-/* Subtle helper text */
+/* Helper text */
 .small-muted{ color: var(--muted); font-size: 0.92rem; line-height: 1.35; }
 
-/* Minimal sticky topbar */
+/* Sticky topbar */
 .apple-topbar{
   position: sticky;
   top: 0;
@@ -128,7 +128,7 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   font-size: 0.92rem;
 }
 
-/* Card system */
+/* Cards */
 .card{
   background: var(--card);
   border: 1px solid var(--line);
@@ -183,7 +183,7 @@ h3{ font-size: 1.15rem; font-weight: 750; }
 .status-warn{ color: #a35a00; font-weight: 800; }
 .status-muted{ color: var(--muted); font-weight: 650; }
 
-/* Buttons (global) */
+/* Buttons */
 .stButton > button{
   background: var(--accent);
   border: 1px solid rgba(0,0,0,0.0);
@@ -204,7 +204,7 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   border-bottom: 1px solid var(--line) !important;
 }
 
-/* Sidebar: subtle */
+/* Sidebar */
 [data-testid="stSidebar"]{
   background: rgba(245,245,247,0.92);
   border-right: 1px solid var(--line);
@@ -213,7 +213,7 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   padding-top: 1.15rem;
 }
 
-/* --- Modern tab chips (button-based) --- */
+/* --- Modern tab chips --- */
 .nav-chip button{
   width: 100%;
   background: rgba(0,0,0,0.04) !important;
@@ -227,8 +227,6 @@ h3{ font-size: 1.15rem; font-weight: 750; }
 .nav-chip button:hover{
   background: rgba(0,0,0,0.06) !important;
 }
-
-/* Active chip */
 .nav-chip-active button{
   background: rgba(0,113,227,0.12) !important;
   border-color: rgba(0,113,227,0.22) !important;
@@ -238,8 +236,6 @@ h3{ font-size: 1.15rem; font-weight: 750; }
 /* ================================
    INPUT FIELD SURFACE IMPROVEMENTS
 ================================ */
-
-/* Base input surface (select/input/textarea) */
 [data-baseweb="select"] > div,
 [data-baseweb="input"] input,
 [data-baseweb="textarea"] textarea {
@@ -249,15 +245,11 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
   padding-top: 2px !important;
 }
-
-/* Hover */
 [data-baseweb="select"] > div:hover,
 [data-baseweb="input"] input:hover,
 [data-baseweb="textarea"] textarea:hover {
   border-color: rgba(0,0,0,0.25) !important;
 }
-
-/* Focus (clicked) */
 [data-baseweb="select"] > div:focus-within,
 [data-baseweb="input"] input:focus,
 [data-baseweb="textarea"] textarea:focus {
@@ -265,36 +257,43 @@ h3{ font-size: 1.15rem; font-weight: 750; }
   box-shadow: 0 0 0 3px rgba(10,132,255,0.18) !important;
   background: #ffffff !important;
 }
-
-/* Slider track */
 [data-testid="stSlider"] > div > div {
   background: rgba(0,0,0,0.10) !important;
   border-radius: 999px;
 }
-
-/* Slider handle */
 [data-testid="stSlider"] [role="slider"] {
   background: #0a84ff !important;
   border: 2px solid white !important;
   box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
+[data-baseweb="select"] svg { fill: #6e6e73 !important; }
+label { color: #1d1d1f !important; font-weight: 650; }
 
-/* Dropdown arrow */
-[data-baseweb="select"] svg {
-  fill: #6e6e73 !important;
+/* Home feature tiles */
+.feature{
+  padding: 16px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.9);
+  box-shadow: var(--shadow2);
 }
-
-/* Labels slightly darker */
-label {
-  color: #1d1d1f !important;
-  font-weight: 650;
+.feature h3{
+  margin: 0 0 6px 0;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+.feature p{
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 </style>
 """
 st.markdown(APPLE_STYLE, unsafe_allow_html=True)
 
 # ---------------------------
-# Topbar + Hero
+# Topbar (global)
 # ---------------------------
 st.markdown(
     """
@@ -305,28 +304,15 @@ st.markdown(
           <span>gauchoGPT</span>
           <small>UCSB Student Helper</small>
         </div>
-        <div class="topbar-right">Housing • Academics • Professors • Aid & Jobs</div>
+        <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>
       </div>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <div class="card" style="padding:22px 22px;">
-      <div style="font-size:2.2rem; font-weight:900; letter-spacing:-0.03em;">UCSB tools, in one place.</div>
-      <div class="small-muted" style="margin-top:6px;">
-        Find housing, plan classes, check professors, and navigate aid & jobs — faster.
-      </div>
-    </div>
-    <div class="section-gap"></div>
     """,
     unsafe_allow_html=True,
 )
 
 # ---------------------------
-# Sidebar (clean)
+# Sidebar (global)
 # ---------------------------
 st.sidebar.title("gauchoGPT")
 st.sidebar.caption("UCSB helpers — housing · classes · professors · aid · jobs")
@@ -339,7 +325,6 @@ csv_exists = os.path.exists("major_courses_by_quarter.csv")
 
 if db_exists:
     st.sidebar.success("✅ Course database active")
-
     import sqlite3
     try:
         conn = sqlite3.connect("gauchoGPT.db")
@@ -377,6 +362,112 @@ if HAS_SCRAPER:
                     st.error(f"Scraper error: {e}")
 
 st.sidebar.divider()
+st.sidebar.markdown(
+    """
+**Next steps (quick)**
+- Keep CSV updated
+- Configure scraper selectors
+- Connect LLM for Q&A
+"""
+)
+
+# ============================================================
+# Pages
+# ============================================================
+
+# ---------------------------
+# HOME / ABOUT (landing)
+# ---------------------------
+def home_page():
+    st.markdown(
+        """
+        <div class="card" style="padding:22px;">
+          <div style="font-size:2.2rem; font-weight:900; letter-spacing:-0.03em;">
+            UCSB tools, in one place.
+          </div>
+          <div class="small-muted" style="margin-top:10px;">
+            gauchoGPT is a student-first dashboard to find housing, plan classes, check professors,
+            and navigate aid & jobs — fast. Built to be clean, organized, and easy to use.
+          </div>
+        </div>
+        <div class="section-gap"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(
+            """
+            <div class="feature">
+              <h3>🏠 Housing</h3>
+              <p>Browse IV listings from a CSV snapshot with filters for price, beds, status, and pets.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(
+            """
+            <div class="feature">
+              <h3>📚 Academics</h3>
+              <p>Plan quarters, search courses, and explore advising resources (CSV or live scraper).</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c3:
+        st.markdown(
+            """
+            <div class="feature">
+              <h3>👩‍🏫 Professors</h3>
+              <p>Quick RateMyProfessors searches + department directory links in one spot.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+
+    c4, c5 = st.columns(2)
+    with c4:
+        st.markdown(
+            """
+            <div class="feature">
+              <h3>💸 Aid & Jobs</h3>
+              <p>Short explainers + fast links to FAFSA, UCSB Financial Aid, Work-Study, and Handshake.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c5:
+        st.markdown(
+            """
+            <div class="feature">
+              <h3>💬 Q&A</h3>
+              <p>Optional: connect an LLM to answer UCSB questions with your preferred provider.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="card">
+          <div style="font-weight:900; font-size:1.05rem;">How it works</div>
+          <div class="small-muted" style="margin-top:10px;">
+            • Housing uses <code>iv_housing_listings.csv</code><br/>
+            • Academics uses <code>gauchoGPT.db</code> (if scraped) or <code>major_courses_by_quarter.csv</code><br/>
+            • Professors & Aid/Jobs are curated links (fast + low maintenance)<br/>
+            • Q&A is a placeholder you can wire to an API (OpenAI/Anthropic/local)
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 # ---------------------------
 # HOUSING — CSV-backed listings
@@ -442,7 +533,6 @@ def housing_page():
         st.warning("No housing data found in the CSV.")
         return
 
-    # Filters card
     st.markdown('<div class="card">', unsafe_allow_html=True)
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.3, 1.3, 1.3])
 
@@ -477,10 +567,8 @@ def housing_page():
             ["Any", "Only pet-friendly", "No pets allowed"],
             index=0,
         )
-
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Apply filters
     filtered = df.copy()
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
@@ -550,7 +638,6 @@ def housing_page():
             use_container_width=True,
         )
 
-    # Listing cards
     for _, row in filtered.sort_values(["street", "unit"]).iterrows():
         street = row.get("street", "")
         unit = row.get("unit", "")
@@ -670,7 +757,6 @@ def profs_page():
 
     with col2:
         st.link_button("Open dept faculty page", DEPT_SITES[dept])
-
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
@@ -787,10 +873,11 @@ import os
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ---------------------------
-# Modern “word-box” navigation (symmetric)
-# ---------------------------
+# ============================================================
+# Navigation (Home/About + pages)
+# ============================================================
 PAGES: Dict[str, Any] = {
+    "🏁 Home": home_page,
     "🏠 Housing": housing_page,
     "📚 Academics": academics_page,
     "👩‍🏫 Professors": profs_page,
@@ -798,12 +885,12 @@ PAGES: Dict[str, Any] = {
     "💬 Q&A": qa_page,
 }
 
-# Default nav state
+# Default nav state -> Home/About landing
 if "main_nav" not in st.session_state:
-    st.session_state["main_nav"] = "🏠 Housing"
+    st.session_state["main_nav"] = "🏁 Home"
 
+# Nav bar
 st.markdown('<div class="card">', unsafe_allow_html=True)
-
 labels = list(PAGES.keys())
 cols = st.columns(len(labels))
 
@@ -823,6 +910,7 @@ st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 # Render selected page
 PAGES[st.session_state["main_nav"]]()
 
+# Footer “Next steps” (optional)
 st.markdown(
     """
     <div class="section-gap"></div>
@@ -838,13 +926,4 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True,
-)
-
-st.sidebar.markdown(
-    """
-**Next steps (quick)**
-- Keep CSV updated
-- Configure scraper selectors
-- Connect LLM for Q&A
-"""
 )
