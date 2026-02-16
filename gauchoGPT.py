@@ -4,6 +4,10 @@ import os
 import base64
 import textwrap
 from typing import Dict, Any, Optional
+import requests
+from housingproperties import parse_isla_vista_properties
+from housing_page import housing_page_from_listings
+
 
 import streamlit as st
 import pandas as pd
@@ -242,6 +246,24 @@ def qa_page():
         st.caption(f"Prompt: {prompt[:120]}{'...' if len(prompt) > 120 else ''}")
     render_html("</div>")
 
+
+def housing_page():
+    # 1) get HTML (replace URL with the exact page you scrape)
+    url = "https://www.ivproperties.com/"  # update this if needed
+    html = requests.get(url, timeout=30).text
+
+    # 2) parse into Listing objects
+    listings = parse_isla_vista_properties(html)
+
+    # 3) render styled page
+    housing_page_from_listings(
+        listings=listings,
+        render_html=render_html,
+        fallback_listing_uri=FALLBACK_LISTING_URI,
+        remote_fallback_url=REMOTE_FALLBACK_IMAGE_URL,
+    )
+
+
 # ---------------------------
 # Routing
 # ---------------------------
@@ -253,7 +275,8 @@ PAGES: Dict[str, Any] = {
     "💸 Aid & Jobs": aid_jobs_page,
     "💬 Q&A": qa_page,
 }
-PAGES.get(st.session_state["main_nav"], home_page)()
+PAGES[st.session_state["main_nav"]]()
+
 
 # ---------------------------
 # Tiny debug footer (helps you catch "wrong entrypoint" instantly)
@@ -261,4 +284,5 @@ PAGES.get(st.session_state["main_nav"], home_page)()
 with st.expander("Debug (click to verify running file)"):
     st.write("Running file:", __file__)
     st.write("Nav:", st.session_state.get("main_nav"))
+
 
