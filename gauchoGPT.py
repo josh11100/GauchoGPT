@@ -36,10 +36,18 @@ st.set_page_config(
 # ---------------------------
 def render_html(html: str) -> None:
     """
-    Render HTML reliably.
-    IMPORTANT: All custom UI blocks must go through this.
+    Render HTML reliably in Streamlit.
+
+    Streamlit's st.markdown() will render any line with 4+ leading spaces as a code block.
+    When we interpolate snippets (like {thumb_html}), indentation can reappear.
+    This function:
+      1) dedents the whole block
+      2) strips blank edges
+      3) removes leading whitespace on EVERY line (prevents code-block rendering)
     """
-    st.markdown(textwrap.dedent(html).strip(), unsafe_allow_html=True)
+    s = textwrap.dedent(html).strip("\n")
+    s = "\n".join(line.lstrip() for line in s.splitlines())
+    st.markdown(s, unsafe_allow_html=True)
 
 def img_to_data_uri(path: str) -> Optional[str]:
     if not os.path.exists(path):
@@ -292,7 +300,7 @@ div[data-testid="stSlider"] {{
   color: #1f2937 !important;
 }}
 
-/* Home rows (matches your screenshot style) */
+/* Home rows */
 .home-row {{
   display:flex;
   align-items:center;
@@ -455,7 +463,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df = pd.read_csv(HOUSING_CSV)
 
-    # Ensure expected columns exist
     for col in [
         "street", "unit", "avail_start", "avail_end",
         "price", "bedrooms", "bathrooms", "max_residents",
@@ -472,7 +479,6 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 
     df["pet_friendly"] = df["pet_friendly"].fillna(False).astype(bool)
 
-    # Normalize status so filters work reliably
     df["status"] = df["status"].fillna("available").astype(str).str.lower().str.strip()
     df["is_studio"] = df["bedrooms"].fillna(0).astype(float).eq(0)
 
@@ -512,88 +518,46 @@ def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: 
     render_html('<div class="section-gap"></div>')
 
 
-
 def home_page():
-    render_html("""
-    <div class="hero">
-      <div class="hero-title">UCSB tools, in one place.</div>
-      <div class="hero-sub">
-        Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.
-      </div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html("""<div class="hero">
+  <div class="hero-title">UCSB tools, in one place.</div>
+  <div class="hero-sub">
+    Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.
+  </div>
+</div>
+<div class="section-gap"></div>""")
 
-    # Optional home thumbnails:
-    # Put your own images in assets/ and change these filenames if you want
     home_thumb = (
         img_to_data_uri("assets/home_thumb.jpg")
         or img_to_data_uri("assets/home_thumb.png")
         or None
     )
 
-    _home_row(
-        "🏠 Housing",
-        "Browse IV listings with clean filters + optional photos.",
-        "Open Housing",
-        "🏠 Housing",
-        thumb_uri=home_thumb,
-    )
-
-    _home_row(
-        "📚 Academics",
-        "Plan quarters, search courses, explore resources.",
-        "Open Academics",
-        "📚 Academics",
-        thumb_uri=home_thumb,
-    )
-
-    _home_row(
-        "👩‍🏫 Professors",
-        "Fast RMP searches + department pages.",
-        "Open Professors",
-        "👩‍🏫 Professors",
-        thumb_uri=home_thumb,
-    )
-
-    _home_row(
-        "💸 Aid & Jobs",
-        "FAFSA, work-study, UCSB aid + Handshake links.",
-        "Open Aid & Jobs",
-        "💸 Aid & Jobs",
-        thumb_uri=home_thumb,
-    )
-
-    _home_row(
-        "💬 Q&A",
-        "Optional: wire to an LLM (OpenAI/Anthropic/local).",
-        "Open Q&A",
-        "💬 Q&A",
-        thumb_uri=home_thumb,
-    )
+    _home_row("🏠 Housing", "Browse IV listings with clean filters + optional photos.", "Open Housing", "🏠 Housing", thumb_uri=home_thumb)
+    _home_row("📚 Academics", "Plan quarters, search courses, explore resources.", "Open Academics", "📚 Academics", thumb_uri=home_thumb)
+    _home_row("👩‍🏫 Professors", "Fast RMP searches + department pages.", "Open Professors", "👩‍🏫 Professors", thumb_uri=home_thumb)
+    _home_row("💸 Aid & Jobs", "FAFSA, work-study, UCSB aid + Handshake links.", "Open Aid & Jobs", "💸 Aid & Jobs", thumb_uri=home_thumb)
+    _home_row("💬 Q&A", "Optional: wire to an LLM (OpenAI/Anthropic/local).", "Open Q&A", "💬 Q&A", thumb_uri=home_thumb)
 
 
 # ---------------------------
 # HOUSING PAGE
 # ---------------------------
 def housing_page():
-    render_html("""
-    <div class="card-soft">
-      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
-      <div class="small-muted">
-        CSV snapshot from ivproperties.com (2026–27).
-        Photos show if <code>image_url</code> exists. Add a local fallback in <code>assets/ucsb_fallback.jpg</code>.
-      </div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html("""<div class="card-soft">
+  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
+  <div class="small-muted">
+    CSV snapshot from ivproperties.com (2026–27).
+    Photos show if <code>image_url</code> exists. Add a local fallback in <code>assets/ucsb_fallback.jpg</code>.
+  </div>
+</div>
+<div class="section-gap"></div>""")
 
     df = load_housing_df()
     if df is None or df.empty:
         st.warning("No housing data found in the CSV.")
         return
 
-    # Filters
     render_html('<div class="card">')
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1.3, 1.3, 1.3])
 
@@ -619,7 +583,6 @@ def housing_page():
 
     render_html("</div>")
 
-    # Apply filters
     filtered = df.copy()
     filtered = filtered[(filtered["price"].isna()) | (filtered["price"] <= price_limit)]
 
@@ -651,16 +614,14 @@ def housing_page():
             | (filtered["pet_policy"].fillna("").astype(str).str.contains("No pets", case=False))
         ]
 
-    render_html(f"""
-    <div class="section-gap"></div>
-    <div class="card-soft">
-      <div class="small-muted">
-        Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
-        • <span class="pill pill-blue">Price ≤ ${price_limit:,}</span>
-      </div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html(f"""<div class="section-gap"></div>
+<div class="card-soft">
+  <div class="small-muted">
+    Showing <strong>{len(filtered)}</strong> of <strong>{len(df)}</strong> units
+    • <span class="pill pill-blue">Price ≤ ${price_limit:,}</span>
+  </div>
+</div>
+<div class="section-gap"></div>""")
 
     if filtered.empty:
         st.info("No units match your filters. Try raising your max price or widening status/bedroom filters.")
@@ -681,7 +642,6 @@ def housing_page():
             use_container_width=True,
         )
 
-    # Listing cards (render via render_html; do NOT use st.write/html strings)
     for _, row in filtered.sort_values(["street", "unit"], na_position="last").iterrows():
         street = safe_str(row.get("street")).strip()
         unit = safe_str(row.get("unit")).strip()
@@ -701,7 +661,6 @@ def housing_page():
         image_url = safe_str(row.get("image_url")).strip()
         listing_url = safe_str(row.get("listing_url")).strip()
 
-        # Status styling
         if status == "available":
             date_part = ""
             if avail_start or avail_end:
@@ -732,7 +691,6 @@ def housing_page():
         price_text = f"${int(price):,}/installment" if pd.notna(price) else "Price not listed"
         ppp_text = f"≈ ${ppp:,.0f} per person" if ppp is not None else ""
 
-        # Image selection
         img_html = ""
         if image_url:
             img_html = f'<img src="{image_url}" alt="Listing photo" />'
@@ -748,36 +706,33 @@ def housing_page():
                 f'<span class="pill pill-gold">View listing ↗</span></a>'
             )
 
-        render_html(f"""
-        <div class="card">
-          <div class="listing-wrap">
-            <div class="thumb">{img_html}</div>
+        render_html(f"""<div class="card">
+  <div class="listing-wrap">
+    <div class="thumb">{img_html}</div>
+    <div>
+      <div class="listing-title">{street}</div>
+      <div class="listing-sub">{unit}</div>
 
-            <div>
-              <div class="listing-title">{street}</div>
-              <div class="listing-sub">{unit}</div>
+      <div class="pills">
+        <span class="pill">{bed_label}</span>
+        <span class="pill">{ba_label}</span>
+        <span class="pill">{residents_label}</span>
+        <span class="pill pill-gold">{pet_label}</span>
+        {link_chip}
+      </div>
 
-              <div class="pills">
-                <span class="pill">{bed_label}</span>
-                <span class="pill">{ba_label}</span>
-                <span class="pill">{residents_label}</span>
-                <span class="pill pill-gold">{pet_label}</span>
-                {link_chip}
-              </div>
-
-              <div style="margin-top:10px;">
-                <div class="{status_class}">{status_text}</div>
-                <div class="price-row">
-                  {price_text}
-                  <span class="small-muted" style="font-weight:750;">{(" · " + ppp_text) if ppp_text else ""}</span>
-                </div>
-                {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
-              </div>
-            </div>
-          </div>
+      <div style="margin-top:10px;">
+        <div class="{status_class}">{status_text}</div>
+        <div class="price-row">
+          {price_text}
+          <span class="small-muted" style="font-weight:750;">{(" · " + ppp_text) if ppp_text else ""}</span>
         </div>
-        <div class="section-gap"></div>
-        """)
+        {f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>" if utilities else ""}
+      </div>
+    </div>
+  </div>
+</div>
+<div class="section-gap"></div>""")
 
 
 # ---------------------------
@@ -790,13 +745,11 @@ DEPT_SITES = {
 }
 
 def profs_page():
-    render_html("""
-    <div class="card-soft">
-      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Professors & course intel</div>
-      <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html("""<div class="card-soft">
+  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Professors & course intel</div>
+  <div class="small-muted">Quick links to RateMyProfessors searches and department faculty pages.</div>
+</div>
+<div class="section-gap"></div>""")
 
     render_html('<div class="card">')
     name = st.text_input("Professor name", placeholder="e.g., Palaniappan, Porter, Levkowitz…")
@@ -827,13 +780,11 @@ AID_LINKS = {
 }
 
 def aid_jobs_page():
-    render_html("""
-    <div class="card-soft">
-      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
-      <div class="small-muted">Short explainers + quick links.</div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html("""<div class="card-soft">
+  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Financial aid, work-study & jobs</div>
+  <div class="small-muted">Short explainers + quick links.</div>
+</div>
+<div class="section-gap"></div>""")
 
     with st.expander("What is financial aid?"):
         st.write(
@@ -861,13 +812,12 @@ def aid_jobs_page():
 # Q&A
 # ---------------------------
 def qa_page():
-    render_html("""
-    <div class="card-soft">
-      <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Ask gauchoGPT</div>
-      <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
-    </div>
-    <div class="section-gap"></div>
-    """)
+    render_html("""<div class="card-soft">
+  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Ask gauchoGPT</div>
+  <div class="small-muted">Wire this to your preferred LLM API or a local model.</div>
+</div>
+<div class="section-gap"></div>""")
+
     render_html('<div class="card">')
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
@@ -889,4 +839,3 @@ PAGES: Dict[str, Any] = {
 }
 
 PAGES[st.session_state["main_nav"]]()
-
