@@ -489,25 +489,20 @@ def load_housing_df() -> Optional[pd.DataFrame]:
 # HOME
 # ---------------------------
 def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: Optional[str] = None):
-    thumb_html = ""
-    if thumb_uri:
-        thumb_html = f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>'
+    thumb_html = f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>' if thumb_uri else ""
 
-    render_html(f"""
-    <div class="card">
-      <div class="home-row">
-        <div class="home-left">
-          {thumb_html}
-          <div>
-            <div class="home-title">{title}</div>
-            <div class="small-muted home-desc">{desc}</div>
-          </div>
-        </div>
+    render_html(f"""<div class="card">
+  <div class="home-row">
+    <div class="home-left">
+      {thumb_html}
+      <div>
+        <div class="home-title">{title}</div>
+        <div class="small-muted home-desc">{desc}</div>
       </div>
     </div>
-    """)
+  </div>
+</div>""")
 
-    # Button aligned to the right (matches your screenshot)
     _, cbtn = st.columns([1, 0.25])
     with cbtn:
         if st.button(btn_text, use_container_width=True):
@@ -515,6 +510,7 @@ def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: 
             st.rerun()
 
     render_html('<div class="section-gap"></div>')
+
 
 
 def home_page():
@@ -893,3 +889,4 @@ PAGES: Dict[str, Any] = {
 }
 
 PAGES[st.session_state["main_nav"]]()
+
