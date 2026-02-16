@@ -34,18 +34,26 @@ def hero_html() -> str:
 # Home cards
 # ---------------------------
 def home_row_html(title: str, desc: str, thumb_uri: Optional[str] = None) -> str:
-    thumb_html = f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>' if thumb_uri else ""
-    return f"""<div class="card">
-  <div class="home-row">
-    <div class="home-left">
-      {thumb_html}
-      <div>
-        <div class="home-title">{title}</div>
-        <div class="small-muted home-desc">{desc}</div>
-      </div>
-    </div>
-  </div>
-</div>"""
+    thumb_html = (
+        f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>'
+        if thumb_uri else ""
+    )
+
+    # IMPORTANT: no leading spaces, no indented multiline blocks
+    return (
+        f'<div class="card">'
+        f'  <div class="home-row">'
+        f'    <div class="home-left">'
+        f'      {thumb_html}'
+        f'      <div>'
+        f'        <div class="home-title">{title}</div>'
+        f'        <div class="small-muted home-desc">{desc}</div>'
+        f'      </div>'
+        f'    </div>'
+        f'  </div>'
+        f'</div>'
+    )
+
 
 
 # ---------------------------
