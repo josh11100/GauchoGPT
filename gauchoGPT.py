@@ -5,15 +5,13 @@ import base64
 import textwrap
 from typing import Dict, Any, Optional
 
-import requests
 import streamlit as st
 import pandas as pd
 from urllib.parse import quote_plus
 
 from academics import academics_page
-from ui_components import topbar_html, hero_html, home_row_html, housing_header_html
-from housingproperties import parse_isla_vista_properties
-from housing_page import housing_page_from_listings
+from ui_components import topbar_html, hero_html, home_row_html
+from housing_page import housing_page  # ✅ CSV housing page lives here
 
 
 # ---------------------------
@@ -26,10 +24,10 @@ st.set_page_config(
 )
 
 # ---------------------------
-# Core render helpers
+# Render helpers
 # ---------------------------
 def render_html(html: str) -> None:
-    # IMPORTANT: do NOT strip every line; it can break HTML rendering
+    # IMPORTANT: don't strip each line; can break HTML rendering
     st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
 
 def img_to_data_uri(path: str) -> Optional[str]:
@@ -52,17 +50,19 @@ def inject_css(css_path: str, *, bg_uri: Optional[str] = None) -> None:
     css = css.replace("{{BG_URI}}", bg_uri or "")
     render_html(f"<style>{css}</style>")
 
-def safe_str(x) -> str:
-    return "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
-
 # ---------------------------
-# Assets (optional)
+# Assets
 # ---------------------------
 BG_URI = (
     img_to_data_uri("assets/ucsb_bg.jpg")
     or img_to_data_uri("assets/ucsb_bg.jpeg")
     or img_to_data_uri("assets/ucsb_bg.png")
     or img_to_data_uri("assets/ucsb_bg.webp")
+)
+
+HOME_THUMB = (
+    img_to_data_uri("assets/home_thumb.jpg")
+    or img_to_data_uri("assets/home_thumb.png")
 )
 
 FALLBACK_LISTING_URI = (
@@ -75,14 +75,14 @@ FALLBACK_LISTING_URI = (
 REMOTE_FALLBACK_IMAGE_URL = None
 
 # ---------------------------
-# Session state
+# State
 # ---------------------------
 NAV_LABELS = ["🏁 Home", "🏠 Housing", "📚 Academics", "👩‍🏫 Professors", "💸 Aid & Jobs", "💬 Q&A"]
 st.session_state.setdefault("main_nav", "🏁 Home")
 st.session_state.setdefault("sidebar_nav_open", False)
 
 # ---------------------------
-# Global UI (CSS + Topbar)
+# Global UI
 # ---------------------------
 inject_css("assets/styles.css", bg_uri=BG_URI)
 render_html(topbar_html())
@@ -127,40 +127,11 @@ def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: 
 
 def home_page():
     render_html(hero_html())
-    home_thumb = img_to_data_uri("assets/home_thumb.jpg") or img_to_data_uri("assets/home_thumb.png")
-
-    _home_row("🏠 Housing", "Browse IV listings with clean filters + optional photos.", "Open Housing", "🏠 Housing", home_thumb)
-    _home_row("📚 Academics", "Plan quarters, search courses, explore resources.", "Open Academics", "📚 Academics", home_thumb)
-    _home_row("👩‍🏫 Professors", "Fast RMP searches + department pages.", "Open Professors", "👩‍🏫 Professors", home_thumb)
-    _home_row("💸 Aid & Jobs", "FAFSA, work-study, UCSB aid + Handshake links.", "Open Aid & Jobs", "💸 Aid & Jobs", home_thumb)
-    _home_row("💬 Q&A", "Optional: wire to an LLM (OpenAI/Anthropic/local).", "Open Q&A", "💬 Q&A", home_thumb)
-
-# ---------------------------
-# HOUSING (real)
-# ---------------------------
-def housing_page():
-    render_html(housing_header_html())
-
-    url = "https://www.ivproperties.com/"  # update if needed
-    try:
-        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-        resp.raise_for_status()
-        html = resp.text
-    except Exception as e:
-        st.error(f"Failed to fetch housing site: {e}")
-        return
-
-    listings = parse_isla_vista_properties(html)
-    if not listings:
-        st.warning("Parser ran but found 0 listings (likely selector mismatch).")
-        return
-
-    housing_page_from_listings(
-        listings=listings,
-        render_html=render_html,
-        fallback_listing_uri=FALLBACK_LISTING_URI,
-        remote_fallback_url=REMOTE_FALLBACK_IMAGE_URL,
-    )
+    _home_row("🏠 Housing", "Browse IV listings with clean filters + optional photos.", "Open Housing", "🏠 Housing", HOME_THUMB)
+    _home_row("📚 Academics", "Plan quarters, search courses, explore resources.", "Open Academics", "📚 Academics", HOME_THUMB)
+    _home_row("👩‍🏫 Professors", "Fast RMP searches + department pages.", "Open Professors", "👩‍🏫 Professors", HOME_THUMB)
+    _home_row("💸 Aid & Jobs", "FAFSA, work-study, UCSB aid + Handshake links.", "Open Aid & Jobs", "💸 Aid & Jobs", HOME_THUMB)
+    _home_row("💬 Q&A", "Optional: wire to an LLM (OpenAI/Anthropic/local).", "Open Q&A", "💬 Q&A", HOME_THUMB)
 
 # ---------------------------
 # Professors
@@ -246,7 +217,6 @@ def qa_page():
     prompt = st.text_area("Ask a UCSB question", placeholder="e.g., How do I switch into the STAT&DS major?")
     if st.button("Answer"):
         st.info("Connect to an API (OpenAI / Anthropic / local) here.")
-        st.caption(f"Prompt: {prompt[:120]}{'...' if len(prompt) > 120 else ''}")
     render_html("</div>")
 
 # ---------------------------
@@ -254,14 +224,14 @@ def qa_page():
 # ---------------------------
 PAGES: Dict[str, Any] = {
     "🏁 Home": home_page,
-    "🏠 Housing": housing_page,
+    "🏠 Housing": lambda: housing_page(
+        render_html=render_html,
+        fallback_listing_uri=FALLBACK_LISTING_URI,
+        remote_fallback_url=REMOTE_FALLBACK_IMAGE_URL,
+    ),
     "📚 Academics": academics_page,
     "👩‍🏫 Professors": profs_page,
     "💸 Aid & Jobs": aid_jobs_page,
     "💬 Q&A": qa_page,
 }
 PAGES[st.session_state["main_nav"]]()
-
-with st.expander("Debug (click to verify running file)"):
-    st.write("Running file:", __file__)
-    st.write("Nav:", st.session_state.get("main_nav"))
