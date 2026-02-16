@@ -1,0 +1,10 @@
+/* ui/theme.css */
+[data-testid="stAppViewContainer"] { background: #ffffff; }
+h1, h2, h3, h4 {
+  color: #003660;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+/* ... keep everything you already have ... */
+.gold-topbar { /* ... */ }
+.gold-nav-wrapper { /* ... */ }
+/* etc */
