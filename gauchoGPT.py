@@ -4,25 +4,17 @@ import os
 import base64
 import textwrap
 from typing import Dict, Any, Optional
+
 import requests
-from housingproperties import parse_isla_vista_properties
-from housing_page import housing_page_from_listings
-
-
 import streamlit as st
 import pandas as pd
 from urllib.parse import quote_plus
 
 from academics import academics_page
-from ui_components import (
-    topbar_html,
-    hero_html,
-    home_row_html,
-    housing_header_html,
-    # If you added these from my expanded ui_components:
-    # housing_summary_html,
-    # housing_listing_card_html,
-)
+from ui_components import topbar_html, hero_html, home_row_html, housing_header_html
+from housingproperties import parse_isla_vista_properties
+from housing_page import housing_page_from_listings
+
 
 # ---------------------------
 # Page config
@@ -37,11 +29,8 @@ st.set_page_config(
 # Core render helpers
 # ---------------------------
 def render_html(html: str) -> None:
-    s = textwrap.dedent(html).strip()
-    # strip EVERY line (not just lstrip) + remove empty lines
-    s = "\n".join(line.strip() for line in s.splitlines() if line.strip())
-    st.markdown(s, unsafe_allow_html=True)
-
+    # IMPORTANT: do NOT strip every line; it can break HTML rendering
+    st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
 
 def img_to_data_uri(path: str) -> Optional[str]:
     if not os.path.exists(path):
@@ -58,10 +47,8 @@ def inject_css(css_path: str, *, bg_uri: Optional[str] = None) -> None:
     if not os.path.exists(css_path):
         st.error(f"Missing CSS file: {css_path}")
         return
-
     with open(css_path, "r", encoding="utf-8") as f:
         css = f.read()
-
     css = css.replace("{{BG_URI}}", bg_uri or "")
     render_html(f"<style>{css}</style>")
 
@@ -85,7 +72,7 @@ FALLBACK_LISTING_URI = (
     or img_to_data_uri("assets/ucsb_fallback.webp")
 )
 
-REMOTE_FALLBACK_IMAGE_URL = None  # set to public URL if you want
+REMOTE_FALLBACK_IMAGE_URL = None
 
 # ---------------------------
 # Session state
@@ -140,11 +127,7 @@ def _home_row(title: str, desc: str, btn_text: str, nav_target: str, thumb_uri: 
 
 def home_page():
     render_html(hero_html())
-
-    home_thumb = (
-        img_to_data_uri("assets/home_thumb.jpg")
-        or img_to_data_uri("assets/home_thumb.png")
-    )
+    home_thumb = img_to_data_uri("assets/home_thumb.jpg") or img_to_data_uri("assets/home_thumb.png")
 
     _home_row("🏠 Housing", "Browse IV listings with clean filters + optional photos.", "Open Housing", "🏠 Housing", home_thumb)
     _home_row("📚 Academics", "Plan quarters, search courses, explore resources.", "Open Academics", "📚 Academics", home_thumb)
@@ -153,14 +136,34 @@ def home_page():
     _home_row("💬 Q&A", "Optional: wire to an LLM (OpenAI/Anthropic/local).", "Open Q&A", "💬 Q&A", home_thumb)
 
 # ---------------------------
-# Housing (placeholder header only; swap in your full housing_page)
+# HOUSING (real)
 # ---------------------------
 def housing_page():
     render_html(housing_header_html())
-    st.info("Hook your full housing_page() here (filters + listing cards).")
+
+    url = "https://www.ivproperties.com/"  # update if needed
+    try:
+        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        st.error(f"Failed to fetch housing site: {e}")
+        return
+
+    listings = parse_isla_vista_properties(html)
+    if not listings:
+        st.warning("Parser ran but found 0 listings (likely selector mismatch).")
+        return
+
+    housing_page_from_listings(
+        listings=listings,
+        render_html=render_html,
+        fallback_listing_uri=FALLBACK_LISTING_URI,
+        remote_fallback_url=REMOTE_FALLBACK_IMAGE_URL,
+    )
 
 # ---------------------------
-# Professors (simple)
+# Professors
 # ---------------------------
 DEPT_SITES = {
     "PSTAT": "https://www.pstat.ucsb.edu/people",
@@ -193,7 +196,7 @@ def profs_page():
     render_html("</div>")
 
 # ---------------------------
-# Aid & Jobs (simple)
+# Aid & Jobs
 # ---------------------------
 AID_LINKS = {
     "FAFSA": "https://studentaid.gov/h/apply-for-aid/fafsa",
@@ -230,7 +233,7 @@ def aid_jobs_page():
     render_html("</div>")
 
 # ---------------------------
-# Q&A (placeholder)
+# Q&A
 # ---------------------------
 def qa_page():
     render_html("""<div class="card-soft">
@@ -246,24 +249,6 @@ def qa_page():
         st.caption(f"Prompt: {prompt[:120]}{'...' if len(prompt) > 120 else ''}")
     render_html("</div>")
 
-
-def housing_page():
-    # 1) get HTML (replace URL with the exact page you scrape)
-    url = "https://www.ivproperties.com/"  # update this if needed
-    html = requests.get(url, timeout=30).text
-
-    # 2) parse into Listing objects
-    listings = parse_isla_vista_properties(html)
-
-    # 3) render styled page
-    housing_page_from_listings(
-        listings=listings,
-        render_html=render_html,
-        fallback_listing_uri=FALLBACK_LISTING_URI,
-        remote_fallback_url=REMOTE_FALLBACK_IMAGE_URL,
-    )
-
-
 # ---------------------------
 # Routing
 # ---------------------------
@@ -277,12 +262,6 @@ PAGES: Dict[str, Any] = {
 }
 PAGES[st.session_state["main_nav"]]()
 
-
-# ---------------------------
-# Tiny debug footer (helps you catch "wrong entrypoint" instantly)
-# ---------------------------
 with st.expander("Debug (click to verify running file)"):
     st.write("Running file:", __file__)
     st.write("Nav:", st.session_state.get("main_nav"))
-
-
