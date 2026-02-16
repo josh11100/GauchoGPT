@@ -1,0 +1,62 @@
+/* styles.css */
+:root {
+  --bg: #f6f7fb;
+  --card: rgba(255,255,255,0.90);
+  --card2: rgba(255,255,255,0.96);
+  --text: #0f172a;
+  --muted: #5b6475;
+  --line: rgba(15,23,42,0.10);
+  --shadow: 0 12px 35px rgba(2, 6, 23, 0.10);
+  --shadow2: 0 6px 18px rgba(2, 6, 23, 0.08);
+  --radius: 18px;
+
+  --navy: #003660;
+  --gold: #FDB515;
+  --blue: #0a84ff;
+  --blue2: #0071e3;
+
+  --ok: #16a34a;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+}
+
+[data-testid="stAppViewContainer"] {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+               "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+}
+
+/* OPTIONAL: background image overlay
+   We'll replace {{BG_URI}} from Python */
+[data-testid="stAppViewContainer"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,54,96,0.10) 0%, rgba(246,247,251,0.88) 40%, rgba(246,247,251,0.98) 100%),
+    radial-gradient(900px 380px at 18% 10%, rgba(253,181,21,0.18), rgba(255,255,255,0.0)),
+    url("{{BG_URI}}");
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+[data-testid="stAppViewContainer"] > .main {
+  position: relative;
+  z-index: 1;
+}
+
+.block-container {
+  padding-top: 5.2rem;
+  max-width: 1480px;
+}
+
+.small-muted { color: var(--muted); font-size: 0.93rem; line-height: 1.35; }
+
+/* … keep the rest of your CSS exactly as you already have … */
+
+/* Hide Streamlit chrome */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
