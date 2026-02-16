@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from typing import Optional, Callable
+import os
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -44,16 +47,127 @@ def listings_to_df(listings: list[Listing]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def housing_page_from_listings(
+# ---------------------------
+# CSV support (iv_housing_listings.csv)
+# ---------------------------
+
+@st.cache_data
+def load_listings_csv(path: str = "iv_housing_listings.csv") -> pd.DataFrame:
+    return pd.read_csv(path)
+
+
+def _to_num(x):
+    """
+    Convert '$2,400', '2400', 'starting_1800', '2,400/mo', etc -> float or NaN.
+    """
+    if pd.isna(x):
+        return float("nan")
+    s = str(x).strip().lower()
+    m = re.search(r"(\d[\d,]*)", s)
+    if not m:
+        return float("nan")
+    return float(m.group(1).replace(",", ""))
+
+
+def normalize_csv_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Maps a listings CSV into the column schema your UI expects.
+    If your CSV headers differ, adjust mappings here.
+    """
+    out = pd.DataFrame()
+
+    # street/address/title
+    if "street" in df.columns:
+        out["street"] = df["street"]
+    elif "address" in df.columns:
+        out["street"] = df["address"]
+    elif "title" in df.columns:
+        out["street"] = df["title"]
+    else:
+        out["street"] = ""
+
+    # unit
+    out["unit"] = df["unit"] if "unit" in df.columns else ""
+
+    # status
+    if "status_raw" in df.columns:
+        out["status_raw"] = df["status_raw"]
+        out["status"] = df["status_raw"].astype(str).str.lower().str.strip()
+    elif "status" in df.columns:
+        out["status_raw"] = df["status"]
+        out["status"] = df["status"].astype(str).str.lower().str.strip()
+    else:
+        out["status_raw"] = ""
+        out["status"] = ""
+
+    # price
+    if "price" in df.columns:
+        out["price"] = df["price"].apply(_to_num)
+    elif "rent" in df.columns:
+        out["price"] = df["rent"].apply(_to_num)
+    else:
+        out["price"] = float("nan")
+
+    # bedrooms/bathrooms
+    if "bedrooms" in df.columns:
+        out["bedrooms"] = pd.to_numeric(df["bedrooms"], errors="coerce")
+    elif "beds" in df.columns:
+        out["bedrooms"] = pd.to_numeric(df["beds"], errors="coerce")
+    else:
+        out["bedrooms"] = float("nan")
+
+    if "bathrooms" in df.columns:
+        out["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
+    elif "baths" in df.columns:
+        out["bathrooms"] = pd.to_numeric(df["baths"], errors="coerce")
+    else:
+        out["bathrooms"] = float("nan")
+
+    # max residents
+    if "max_residents" in df.columns:
+        out["max_residents"] = pd.to_numeric(df["max_residents"], errors="coerce")
+    elif "max_occupancy" in df.columns:
+        out["max_residents"] = pd.to_numeric(df["max_occupancy"], errors="coerce")
+    else:
+        out["max_residents"] = float("nan")
+
+    # pet fields
+    out["pet_policy"] = df["pet_policy"] if "pet_policy" in df.columns else "Pet friendly"
+    if "pet_friendly" in df.columns:
+        out["pet_friendly"] = df["pet_friendly"]
+    else:
+        out["pet_friendly"] = None
+
+    # utilities / image / url
+    out["utilities"] = df["utilities"] if "utilities" in df.columns else ""
+    out["image_url"] = df["image_url"] if "image_url" in df.columns else ""
+    if "listing_url" in df.columns:
+        out["listing_url"] = df["listing_url"]
+    elif "details_url" in df.columns:
+        out["listing_url"] = df["details_url"]
+    elif "url" in df.columns:
+        out["listing_url"] = df["url"]
+    else:
+        out["listing_url"] = ""
+
+    # derived
+    out["is_studio"] = out["bedrooms"].fillna(-1).astype(float) == 0
+
+    # normalize strings
+    for col in ["street", "unit", "status_raw", "pet_policy", "utilities", "image_url", "listing_url"]:
+        if col in out.columns:
+            out[col] = out[col].fillna("").astype(str)
+
+    return out
+
+
+def _render_housing_from_df(
     *,
-    listings: list[Listing],
+    df: pd.DataFrame,
     render_html: Callable[[str], None],
     fallback_listing_uri: Optional[str] = None,
     remote_fallback_url: Optional[str] = None,
 ):
-    render_html(housing_header_html())
-
-    df = listings_to_df(listings)
     if df.empty:
         st.warning("No listings found.")
         return
@@ -77,7 +191,9 @@ def housing_page_from_listings(
         bedroom_choice = st.selectbox("Bedrooms", ["Any", "Studio", "1", "2", "3", "4", "5+"], index=0)
 
     with c3:
-        status_choice = st.selectbox("Status filter", ["Available only", "All statuses", "Processing only", "Leased only"], index=0)
+        status_choice = st.selectbox(
+            "Status filter", ["Available only", "All statuses", "Processing only", "Leased only"], index=0
+        )
 
     with c4:
         pet_choice = st.selectbox("Pet policy", ["Any", "Only pet-friendly", "No pets allowed"], index=0)
@@ -180,3 +296,49 @@ def housing_page_from_listings(
                 link_chip=link_chip,
             )
         )
+
+
+# ---------------------------
+# Public entrypoints
+# ---------------------------
+
+def housing_page_from_listings(
+    *,
+    listings: list[Listing],
+    render_html: Callable[[str], None],
+    fallback_listing_uri: Optional[str] = None,
+    remote_fallback_url: Optional[str] = None,
+):
+    render_html(housing_header_html())
+
+    df = listings_to_df(listings)
+    _render_housing_from_df(
+        df=df,
+        render_html=render_html,
+        fallback_listing_uri=fallback_listing_uri,
+        remote_fallback_url=remote_fallback_url,
+    )
+
+
+def housing_page_from_csv(
+    *,
+    csv_path: str = "iv_housing_listings.csv",
+    render_html: Callable[[str], None],
+    fallback_listing_uri: Optional[str] = None,
+    remote_fallback_url: Optional[str] = None,
+):
+    render_html(housing_header_html())
+
+    if not os.path.exists(csv_path):
+        st.error(f"Couldn't find {csv_path}. Put it in your project root (or update the path).")
+        return
+
+    raw = load_listings_csv(csv_path)
+    df = normalize_csv_df(raw)
+
+    _render_housing_from_df(
+        df=df,
+        render_html=render_html,
+        fallback_listing_uri=fallback_listing_uri,
+        remote_fallback_url=remote_fallback_url,
+    )
