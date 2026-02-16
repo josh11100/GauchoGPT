@@ -33,18 +33,11 @@ st.set_page_config(
 # Core render helpers
 # ---------------------------
 def render_html(html: str) -> None:
-    """
-    Streamlit markdown turns 4+ leading spaces into a code block.
-    This makes HTML accidentally display as literal text.
-
-    We:
-      - dedent
-      - strip top/bottom
-      - lstrip every line (prevents code-block rendering)
-    """
-    s = textwrap.dedent(html).strip("\n")
-    s = "\n".join(line.lstrip() for line in s.splitlines())
+    s = textwrap.dedent(html).strip()
+    # strip EVERY line (not just lstrip) + remove empty lines
+    s = "\n".join(line.strip() for line in s.splitlines() if line.strip())
     st.markdown(s, unsafe_allow_html=True)
+
 
 def img_to_data_uri(path: str) -> Optional[str]:
     if not os.path.exists(path):
@@ -268,3 +261,4 @@ PAGES.get(st.session_state["main_nav"], home_page)()
 with st.expander("Debug (click to verify running file)"):
     st.write("Running file:", __file__)
     st.write("Nav:", st.session_state.get("main_nav"))
+
