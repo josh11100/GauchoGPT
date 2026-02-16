@@ -1,62 +1,165 @@
-/* styles.css */
-:root {
-  --bg: #f6f7fb;
-  --card: rgba(255,255,255,0.90);
-  --card2: rgba(255,255,255,0.96);
-  --text: #0f172a;
-  --muted: #5b6475;
-  --line: rgba(15,23,42,0.10);
-  --shadow: 0 12px 35px rgba(2, 6, 23, 0.10);
-  --shadow2: 0 6px 18px rgba(2, 6, 23, 0.08);
-  --radius: 18px;
+/* assets/styles.css */
 
-  --navy: #003660;
-  --gold: #FDB515;
-  --blue: #0a84ff;
-  --blue2: #0071e3;
+/* ---- Theme tokens ---- */
+:root{
+  --bg:#f6f7fb;
+  --card:rgba(255,255,255,0.96);
+  --cardSoft:rgba(255,255,255,0.90);
+  --text:#0f172a;
+  --muted:#5b6475;
+  --line:rgba(15,23,42,0.10);
+  --shadow:0 12px 35px rgba(2,6,23,0.10);
+  --shadow2:0 6px 18px rgba(2,6,23,0.08);
+  --radius:18px;
 
-  --ok: #16a34a;
-  --warn: #f59e0b;
-  --bad: #ef4444;
+  --navy:#003660;
+  --gold:#FDB515;
+  --blue:#0a84ff;
+  --blue2:#0071e3;
+
+  --ok:#16a34a;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
 
-[data-testid="stAppViewContainer"] {
-  background: var(--bg);
-  color: var(--text);
+/* ---- App background ---- */
+html, body { background: var(--bg) !important; }
+[data-testid="stAppViewContainer"]{
+  background: var(--bg) !important;
+  color: var(--text) !important;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-               Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
-               "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
 }
 
-/* OPTIONAL: background image overlay
-   We'll replace {{BG_URI}} from Python */
-[data-testid="stAppViewContainer"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
+/* Optional nice background overlay */
+[data-testid="stAppViewContainer"]::before{
+  content:"";
+  position:fixed;
+  inset:0;
   background:
     linear-gradient(180deg, rgba(0,54,96,0.10) 0%, rgba(246,247,251,0.88) 40%, rgba(246,247,251,0.98) 100%),
     radial-gradient(900px 380px at 18% 10%, rgba(253,181,21,0.18), rgba(255,255,255,0.0)),
     url("{{BG_URI}}");
-  background-size: cover;
-  background-position: center;
-  z-index: 0;
+  background-size:cover;
+  background-position:center;
+  z-index:0;
+  pointer-events:none;
+}
+[data-testid="stAppViewContainer"] > .main { position:relative; z-index:1; }
+
+/* ---- Layout ---- */
+.block-container{ padding-top:5.2rem; max-width:1480px; }
+.small-muted{ color:var(--muted); font-size:0.93rem; line-height:1.35; }
+
+/* ---- Topbar ---- */
+.topbar{
+  position:fixed; top:0; left:0; right:0; z-index:1000;
+  background:rgba(246,247,251,0.78);
+  backdrop-filter: blur(16px);
+  border-bottom:1px solid var(--line);
+}
+.topbar-inner{
+  max-width:1480px; margin:0 auto; padding:10px 16px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.brand{ display:flex; align-items:center; gap:10px; font-weight:900; }
+.brand-dot{
+  width:10px; height:10px; background:var(--gold);
+  border-radius:999px;
+  box-shadow:0 0 0 5px rgba(253,181,21,0.18);
+}
+.brand small{ color:var(--muted); font-weight:700; }
+.topbar-right{ color:var(--muted); font-weight:700; font-size:0.93rem; }
+
+/* ---- Cards ---- */
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:16px 18px;
+}
+.card-soft{
+  background:var(--cardSoft);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow2);
+  padding:14px 16px;
+}
+.section-gap{ height:14px; }
+
+/* ---- Hero ---- */
+.hero{
+  background: linear-gradient(135deg, rgba(0,54,96,0.92), rgba(0,113,227,0.78));
+  border:1px solid rgba(255,255,255,0.14);
+  border-radius:22px;
+  box-shadow:var(--shadow);
+  padding:22px;
+  color:white;
+}
+.hero-title{ font-size:2.2rem; font-weight:950; letter-spacing:-0.03em; }
+.hero-sub{ opacity:0.92; margin-top:8px; font-weight:650; }
+
+/* ---- Pills ---- */
+.pills{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.pill{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 10px; border-radius:999px;
+  background:rgba(2,6,23,0.05);
+  border:1px solid rgba(2,6,23,0.08);
+  font-weight:750; font-size:0.90rem;
+}
+.pill-gold{ background:rgba(253,181,21,0.18); border-color:rgba(253,181,21,0.30); }
+.pill-blue{ background:rgba(10,132,255,0.14); border-color:rgba(10,132,255,0.28); }
+
+/* ---- Status ---- */
+.status-ok{ color:var(--ok); font-weight:900; }
+.status-warn{ color:var(--warn); font-weight:900; }
+.status-muted{ color:var(--muted); font-weight:800; }
+
+/* ---- Buttons (works across Streamlit versions) ---- */
+.stButton button{
+  background: linear-gradient(135deg, var(--blue2), var(--blue)) !important;
+  border:1px solid rgba(255,255,255,0.12) !important;
+  color:white !important;
+  border-radius:999px !important;
+  padding:0.60rem 1.05rem !important;
+  font-weight:900 !important;
+  box-shadow:0 10px 25px rgba(0,113,227,0.20) !important;
+}
+.stButton button:hover{ filter:brightness(1.05); }
+
+/* ---- Sidebar ---- */
+[data-testid="stSidebar"]{
+  background:rgba(246,247,251,0.92) !important;
+  border-right:1px solid var(--line) !important;
+}
+[data-testid="stSidebar"] .block-container{ padding-top:1.10rem; }
+
+/* ---- Sidebar hamburger ---- */
+.sidebar-hamburger .stButton button{
+  width:46px !important; height:46px !important; padding:0 !important;
+  border-radius:999px !important;
+  background:rgba(0,54,96,0.10) !important;
+  color:var(--navy) !important;
+  border:1px solid rgba(0,54,96,0.18) !important;
+  box-shadow:none !important;
+  font-size:18px !important;
 }
 
-[data-testid="stAppViewContainer"] > .main {
-  position: relative;
-  z-index: 1;
+/* ---- Home rows ---- */
+.home-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.home-left{ display:flex; align-items:center; gap:14px; }
+.home-thumb{
+  width:64px; height:64px; border-radius:16px; overflow:hidden;
+  border:1px solid rgba(2,6,23,0.10);
+  background:rgba(0,0,0,0.04);
+  flex:0 0 auto;
 }
-
-.block-container {
-  padding-top: 5.2rem;
-  max-width: 1480px;
-}
-
-.small-muted { color: var(--muted); font-size: 0.93rem; line-height: 1.35; }
-
-/* … keep the rest of your CSS exactly as you already have … */
+.home-thumb img{ width:100%; height:100%; object-fit:cover; }
+.home-title{ font-size:1.10rem; font-weight:950; letter-spacing:-0.01em; }
+.home-desc{ margin-top:4px; }
 
 /* Hide Streamlit chrome */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
+#MainMenu{visibility:hidden;}
+footer{visibility:hidden;}
