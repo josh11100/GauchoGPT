@@ -17,12 +17,17 @@ class Listing:
     beds: str
     baths: str
     link: str
+
     max_residents: Optional[int] = None
     status: str = ""
 
+    # numeric helpers for UI/filtering
+    price_value: Optional[float] = None
+    beds_value: Optional[float] = None
+    baths_value: Optional[float] = None
+
 
 def _first_text_matching(chunks, *needles) -> Optional[str]:
-    """Return first text chunk that contains any of the needles."""
     for txt in chunks:
         lower = txt.lower()
         if any(n in lower for n in needles):
@@ -31,7 +36,6 @@ def _first_text_matching(chunks, *needles) -> Optional[str]:
 
 
 def _extract_max_residents(chunks) -> Optional[int]:
-    # Look for "Maximum 6 residents" style text
     for txt in chunks:
         if "resident" in txt.lower():
             m = re.search(r"(\d+)", txt)
@@ -41,23 +45,34 @@ def _extract_max_residents(chunks) -> Optional[int]:
 
 
 def _extract_status(chunks) -> str:
-    # Look for availability-style lines
     for txt in chunks:
         lower = txt.lower()
-        if ("available" in lower
-                or "leased through" in lower
-                or "processing applications" in lower):
+        if ("available" in lower) or ("leased" in lower) or ("processing" in lower):
             return txt
     return ""
 
 
+def _num_from_text(s: str) -> Optional[float]:
+    if not s:
+        return None
+    m = re.search(r"(\d+(\.\d+)?)", s.replace(",", ""))
+    return float(m.group(1)) if m else None
+
+
+def _price_from_text(s: str) -> Optional[float]:
+    if not s:
+        return None
+    m = re.search(r"\$?\s*([\d,]+)", s)
+    if not m:
+        return None
+    return float(m.group(1).replace(",", ""))
+
+
 def parse_isla_vista_properties(html: str) -> List[Listing]:
     """
-    Parse the Isla Vista properties page into a list of Listing objects.
+    Parse the Isla Vista properties page into Listing objects.
 
-    This is written to be fairly robust: it looks for any elements whose
-    CSS class contains 'property' and then uses regex + text heuristics
-    to pull out price, beds, baths, etc.
+    This is heuristic-based; you may tune selectors once you know ivproperties HTML structure.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -69,7 +84,7 @@ def parse_isla_vista_properties(html: str) -> List[Listing]:
 
     cards = soup.find_all(is_property_card)
 
-    # Fallback: if nothing matched, try some generic selectors
+    # Fallback selectors
     if not cards:
         selectors = [
             "div.listing",
@@ -86,47 +101,41 @@ def parse_isla_vista_properties(html: str) -> List[Listing]:
     listings: List[Listing] = []
 
     for node in cards:
-        # text chunks inside the card
         chunks = [t.strip() for t in node.stripped_strings if t.strip()]
-
         if not chunks:
             continue
 
-        # Title / address: usually in an h2/h3, else first chunk
-        title_tag = node.find(["h2", "h3", "h4"])
+        title_tag = node.find(["h1", "h2", "h3", "h4"])
         title = title_tag.get_text(strip=True) if title_tag else chunks[0]
-
-        # Try to separate address from title if possible
         address = title
-        if "," in title:
-            # e.g. "6522 Del Playa Drive, Unit A"
-            address = title
 
-        # Price: first chunk with a $
-        price = _first_text_matching(chunks, "$") or ""
+        price_txt = _first_text_matching(chunks, "$") or ""
+        beds_txt = _first_text_matching(chunks, "bed", "bedroom") or ""
+        baths_txt = _first_text_matching(chunks, "bath", "bathroom") or ""
 
-        # Beds / baths
-        beds = _first_text_matching(chunks, "bed", "bedroom") or ""
-        baths = _first_text_matching(chunks, "bath", "bathroom") or ""
-
-        # Max residents & status
         max_residents = _extract_max_residents(chunks)
         status = _extract_status(chunks)
 
-        # Link (if there's an <a> inside)
         link_tag = node.find("a", href=True)
         link = link_tag["href"] if link_tag else ""
+
+        price_val = _price_from_text(price_txt)
+        beds_val = _num_from_text(beds_txt)
+        baths_val = _num_from_text(baths_txt)
 
         listings.append(
             Listing(
                 title=title,
                 address=address,
-                price=price,
-                beds=beds,
-                baths=baths,
+                price=price_txt,
+                beds=beds_txt,
+                baths=baths_txt,
                 link=link,
                 max_residents=max_residents,
                 status=status,
+                price_value=price_val,
+                beds_value=beds_val,
+                baths_value=baths_val,
             )
         )
 
