@@ -1,45 +1,38 @@
 # ui_components.py
 from __future__ import annotations
-
 from typing import Optional
 
 
-# ---------------------------
-# Top UI blocks
-# ---------------------------
 def topbar_html() -> str:
-    return """<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <span class="brand-dot"></span>
-      <span>gauchoGPT</span>
-      <small>UCSB Student Helper</small>
-    </div>
-    <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>
-  </div>
-</div>"""
+    return (
+        '<div class="topbar">'
+        '  <div class="topbar-inner">'
+        '    <div class="brand">'
+        '      <span class="brand-dot"></span>'
+        '      <span>gauchoGPT</span>'
+        '      <small>UCSB Student Helper</small>'
+        '    </div>'
+        '    <div class="topbar-right">Home • Housing • Academics • Professors • Aid & Jobs • Q&A</div>'
+        '  </div>'
+        '</div>'
+    )
 
 
 def hero_html() -> str:
-    return """<div class="hero">
-  <div class="hero-title">UCSB tools, in one place.</div>
-  <div class="hero-sub">
-    Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.
-  </div>
-</div>
-<div class="section-gap"></div>"""
-
-
-# ---------------------------
-# Home cards
-# ---------------------------
-def home_row_html(title: str, desc: str, thumb_uri: Optional[str] = None) -> str:
-    thumb_html = (
-        f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>'
-        if thumb_uri else ""
+    return (
+        '<div class="hero">'
+        '  <div class="hero-title">UCSB tools, in one place.</div>'
+        '  <div class="hero-sub">Find housing, plan classes, check professors, and navigate aid & jobs — built for speed and clarity.</div>'
+        '</div>'
+        '<div class="section-gap"></div>'
     )
 
-    # IMPORTANT: no leading spaces, no indented multiline blocks
+
+def home_row_html(title: str, desc: str, thumb_uri: Optional[str] = None) -> str:
+    thumb_html = (
+        f'<div class="home-thumb"><img src="{thumb_uri}" alt="UCSB" /></div>' if thumb_uri else ""
+    )
+    # Keep HTML non-indented so Streamlit never treats it as a code block
     return (
         f'<div class="card">'
         f'  <div class="home-row">'
@@ -55,30 +48,28 @@ def home_row_html(title: str, desc: str, thumb_uri: Optional[str] = None) -> str
     )
 
 
-
-# ---------------------------
-# Housing page blocks
-# ---------------------------
 def housing_header_html() -> str:
-    return """<div class="card-soft">
-  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">Isla Vista Housing</div>
-  <div class="small-muted">
-    CSV snapshot from ivproperties.com (2026–27).
-    Photos show if <code>image_url</code> exists. Add a local fallback in <code>assets/ucsb_fallback.jpg</code>.
-  </div>
-</div>
-<div class="section-gap"></div>"""
+    return (
+        '<div class="card-soft">'
+        '  <div style="font-size:1.35rem; font-weight:950; letter-spacing:-0.02em;">🏠 Isla Vista Housing (CSV snapshot)</div>'
+        '  <div class="small-muted">Snapshot of selected Isla Vista units from ivproperties.com for the 2026–27 lease term. '
+        'Filters below help you find fits by price, bedrooms, status, and pet policy.</div>'
+        '</div>'
+        '<div class="section-gap"></div>'
+    )
 
 
 def housing_summary_html(showing: int, total: int, price_limit: int) -> str:
-    return f"""<div class="section-gap"></div>
-<div class="card-soft">
-  <div class="small-muted">
-    Showing <strong>{showing}</strong> of <strong>{total}</strong> units
-    • <span class="pill pill-blue">Price ≤ ${price_limit:,}</span>
-  </div>
-</div>
-<div class="section-gap"></div>"""
+    return (
+        '<div class="section-gap"></div>'
+        '<div class="card-soft">'
+        f'  <div class="small-muted">'
+        f'    Showing <strong>{showing}</strong> of <strong>{total}</strong> units • Price ≤ '
+        f'    <span class="pill pill-blue">${price_limit:,}</span>'
+        f'  </div>'
+        '</div>'
+        '<div class="section-gap"></div>'
+    )
 
 
 def housing_listing_card_html(
@@ -97,38 +88,40 @@ def housing_listing_card_html(
     img_html: str,
     link_chip: str,
 ) -> str:
+    # unit line optional
+    unit_html = f'<div class="listing-sub">{unit}</div>' if unit else ""
+
     utilities_html = (
         f"<div class='small-muted' style='margin-top:6px;'>Included utilities: {utilities}</div>"
-        if utilities
-        else ""
+        if utilities else ""
     )
-    ppp_html = f" · {ppp_text}" if ppp_text else ""
 
-    return f"""<div class="card">
-  <div class="listing-wrap">
-    <div class="thumb">{img_html}</div>
+    ppp_html = (
+        f"<span class='small-muted' style='font-weight:750;'> · {ppp_text}</span>"
+        if ppp_text else ""
+    )
 
-    <div>
-      <div class="listing-title">{street}</div>
-      <div class="listing-sub">{unit}</div>
-
-      <div class="pills">
-        <span class="pill">{bed_label}</span>
-        <span class="pill">{ba_label}</span>
-        <span class="pill">{residents_label}</span>
-        <span class="pill pill-gold">{pet_label}</span>
-        {link_chip}
-      </div>
-
-      <div style="margin-top:10px;">
-        <div class="{status_class}">{status_text}</div>
-        <div class="price-row">
-          {price_text}
-          <span class="small-muted" style="font-weight:750;">{ppp_html}</span>
-        </div>
-        {utilities_html}
-      </div>
-    </div>
-  </div>
-</div>
-<div class="section-gap"></div>"""
+    return (
+        '<div class="card">'
+        '  <div class="listing-wrap">'
+        f'    <div class="thumb">{img_html}</div>'
+        '    <div>'
+        f'      <div class="listing-title">{street}</div>'
+        f'      {unit_html}'
+        '      <div class="pills">'
+        f'        <span class="pill">{bed_label}</span>'
+        f'        <span class="pill">{ba_label}</span>'
+        f'        <span class="pill">{residents_label}</span>'
+        f'        <span class="pill pill-gold">{pet_label}</span>'
+        f'        {link_chip}'
+        '      </div>'
+        '      <div style="margin-top:10px;">'
+        f'        <div class="{status_class}">{status_text}</div>'
+        f'        <div class="price-row">{price_text}{ppp_html}</div>'
+        f'        {utilities_html}'
+        '      </div>'
+        '    </div>'
+        '  </div>'
+        '</div>'
+        '<div class="section-gap"></div>'
+    )
